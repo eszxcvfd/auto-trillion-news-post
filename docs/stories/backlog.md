@@ -1,12 +1,8 @@
 # Story Backlog
 
-This backlog will be populated after a user provides a project spec or selects a
-specific initiative.
+This backlog lists the candidate epics for the Trillion News Auto Post System. 
 
-Do not create every possible story packet up front. Create story packets when
-the work is selected or when a product decision needs a durable place to land.
-
-## Candidate Epics
+## v1 Epics (Archived/Implemented)
 
 | Epic | Description | Status |
 | --- | --- | --- |
@@ -15,3 +11,12 @@ the work is selected or when a product decision needs a durable place to land.
 | E03 | Save to Excel & Image Screenshot (Phase 3) | implemented |
 | E04 | AI Post Generation (Phase 4) | implemented |
 | E05 | Assisted Social Posting (Phase 5) | implemented |
+
+## v2 Epics (New Platform & Web UI - Planned)
+
+| Epic | Description | Status |
+| --- | --- | --- |
+| E06 | Core Refactor & Input Parsing (v2 Phase 1) | planned |
+| E07 | Multi-Platform Posting Modules (v2 Phase 2) | planned |
+| E08 | Web UI Dashboard (v2 Phase 3) | planned |
+| E09 | Scheduled Posting & APScheduler (v2 Phase 4) | planned |

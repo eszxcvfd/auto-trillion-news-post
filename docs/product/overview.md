@@ -1,87 +1,89 @@
-# Product Overview — Trillion News Auto Post System
+# Product Overview — Trillion News Auto Post System v2
 
 Derived from [SPEC.md](file:///home/trung/Documents/2026/project/auto-trillion-news-post/SPEC.md).
 
-The **Trillion News Auto Post System** is a local utility designed to automate the manual workflow of finding news articles related to the term "trillion" (in various forms), saving their information to an Excel sheet, capturing screenshots of the news items, generating social media post drafts in English using Gen AI, and optionally assisting with posting on LinkedIn.
+The **Trillion News Auto Post System v2** is a local utility designed to read pre-written social media posts from an Excel sheet (`Trillion $ news(1).xlsx`), download post images from Google Drive sharing URLs, automate browser posting via Playwright across 8 social media platforms, capture post permalinks, and save them back into the Excel file. It provides a Web UI for non-technical users and supports scheduled posting.
+
+---
 
 ## 1. Objectives & MVP Scope
 
-- **Search**: Programmatically search Google News or Bing News for configurable keywords (e.g. `Payment services trillion $`, `AI trillion dollar market`).
-- **Filter**: Filter results to only keep those containing "trillion", "trillion-dollar", "$ trillion", "USD ... trillion" (case-insensitive) in the title, snippet, or URL.
-- **Excel Storage**: Save all filtered news to a local Excel file `output/Trillion $ news.xlsx` with status tracking.
-- **Image Capture**: Capture screenshots of the news card or search results and save to `output/Ảnh Trillion $ news/` as PNG, referencing the file name in the Excel row.
-- **AI Post Generation**: Generate professional, strategically insightful LinkedIn posts in English based on the news using **Gemini API / Gemma 4** models. Save post drafts to `output/posts/` as Markdown (`.md`).
-- **Assisted Posting**: Open a browser via Playwright, paste the generated post content into LinkedIn's composer, upload the captured screenshot, and let the operator manually review and click the "Post" button.
-
-### Non-Goals for MVP
-- 100% automated posting using official APIs.
-- Captcha, login, rate-limit, or anti-bot bypass.
-- Large-scale scraping (limited to target results/keywords).
-- Multi-user support or web-based dashboards.
+- **Input Reading**: Read multi-sheet Excel files. Strip whitespace from headers and handle missing output columns dynamically.
+- **Image Downloading**: Parse file IDs from Google Drive links and download them to a local directory for upload.
+- **Automated Posting**: Log in (via persistent session storage) and post to 8 social media platforms:
+  1. LinkedIn
+  2. Facebook
+  3. X (Twitter)
+  4. Instagram
+  5. Pinterest
+  6. Threads
+  7. TikTok
+  8. YouTube
+- **Selective Posting**: Skip posting for platforms that already have a successful link recorded in the output cell to prevent duplicate posts.
+- **Link Capturing**: Capture post permalinks after successful posts, using fallback values if capturing times out.
+- **Output Writing**: Append results to the `Link Post` column in real-time, backing up the Excel file first.
+- **Enhanced Interface**: Web UI for non-technical users to upload, preview, trigger, and monitor runs.
+- **Scheduling**: Persist scheduled posting tasks (one-time or daily/cron recurring) via APScheduler.
 
 ---
 
 ## 2. Core Workflows
 
-### 2.1 Full Draft Pipeline (`python main.py run`)
-1. Read keywords from `keywords.txt` or `config.yaml`.
-2. Open browser with Playwright to search for keywords on Google/Bing News.
-3. Parse and filter results matching "trillion" terms.
-4. Deduplicate results using normalized URLs and titles.
-5. Save results in `output/Trillion $ news.xlsx` with status `new`.
-6. Capture screenshots of news cards, saving to `output/Ảnh Trillion $ news/`.
-7. Generate posts via **Gemini API** for all `new` items, save as `.md` under `output/posts/`, and update status to `generated`.
+### 2.1 Excel Parsing & Selective run (`python main.py post`)
+1. Read the sheet names and values from `Trillion $ news(1).xlsx`.
+2. Map headers to columns after stripping trailing/leading whitespaces (e.g. `'TikTok '` -> `'TikTok'`).
+3. For each row, check the `Link Post` cell to parse already-posted URLs.
+4. Filter down to platforms that have pre-written content (ignoring empty/whitespace-only cells) and do not have a recorded link.
+5. If there is an image URL, parse the file ID and download the image to the local `./images` directory.
+6. Post up to a configured limit of rows (default 2) per run.
 
-### 2.2 Assisted Posting (`python main.py post --id <id>`)
-1. Locate the news item by ID in `output/Trillion $ news.xlsx`.
-2. Read the post content from its `.md` file.
-3. Launch browser (non-headless), navigate to LinkedIn.
-4. Wait for operator to login (if needed).
-5. Paste content into LinkedIn composer.
-6. Upload the news screenshot from `output/Ảnh Trillion $ news/`.
-7. Pause execution to let the operator manually edit/submit the post.
-8. Upon manual completion, update status to `posted` in the Excel file.
+### 2.2 Browser Automation Posting & Capturing
+1. Launch Playwright using a persistent browser context per platform (saved in `./.browser_sessions/<platform>`).
+2. Navigate to the platform. Check login status. If the operator needs to log in, launch a visible browser and wait.
+3. Once logged in, execute the platform-specific posting steps (typing text, selecting files, sharing).
+4. Extract the post permalink from the browser. If it times out or fails, mark as `[posted-no-link]`.
+5. Append the result to the `Link Post` column and write it back to the Excel file.
 
----
-
-## 3. Configuration & System Rules
-
-### 3.1 Environment (`.env`)
-- **AI Provider**: `gemini`
-- **AI API Key**: `GEMINI_API_KEY` env var
-- **AI Model**: `gemini-1.5-flash` or `gemma-4` (or other approved Gemini models)
-- **Search Provider**: `browser` (Playwright)
-- **Headless Mode**: `false` (for interactive review / debugging)
-- **File & Folder Paths**: Configurable outputs for Excel, images, and posts.
-
-### 3.2 Post Formatting Rules (LinkedIn / Facebook)
-All generated posts must strictly adhere to the following template:
-
-```text
-#IndustryHashtag #Hashtag2 #Hashtag3 #Hashtag4 #Hashtag5
-
-[Post Content - Professional Business Style in English]
-[Mention trillion-dollar opportunity and strategic insight]
-
-#TAHKFoundation #HenryUniverses #USIran #USTariffs #Trump
-```
-
-#### Hashtag Rules:
-1. **Top Hashtags**: Exactly 5 hashtags. The first must be the main industry hashtag. The remaining 4 must be relevant news-specific hashtags proposed by the AI.
-2. **Bottom Hashtags**: Exactly these 5 fixed hashtags: `#TAHKFoundation #HenryUniverses #USIran #USTariffs #Trump`.
+### 2.3 Web Interface & Control (`python main.py serve`)
+- **Dashboard**: Lists all rows, categories, contents, and status indicators.
+- **Upload**: Upload new files and validate columns.
+- **Preview**: View draft text and images before posting.
+- **Login Status**: Monitor and refresh sessions for all 8 platforms.
+- **Schedules**: Add, remove, and monitor automated scheduled runs.
 
 ---
 
-## 4. Expected Output structure
-All outputs must be written to the local `./output` folder (configured in `.env` and `.gitignore`d):
+## 3. Configuration & Inputs
 
+### 3.1 Excel Column Layout (12 columns)
+1. `#` (Row ID)
+2. `Trillion $ news Title` (Title, used to name image files)
+3. `Image link` (Google Drive sharing link)
+4. `Linkedin` (Post body)
+5. `Facebook` (Post body)
+6. `X (Twitter)` (Post body)
+7. `Instagram` (Post body)
+8. `Pinterest` (Post body)
+9. `Threads` (Post body)
+10. `TikTok ` (Post body)
+11. `YouTube` (Post body)
+12. `Link Post` (Newline-separated status and URLs - Output)
+
+### 3.2 Post Formatting Constraint
+Posts contain pre-written tags and body text from Excel. The system posts them exactly as is, except for trailing/leading whitespaces.
+
+---
+
+## 4. Expected Output Structure
+Outputs must be kept locally:
 ```text
-output/
-├── Trillion $ news.xlsx
-├── posts/
-│   └── YYYY-MM-DD_{id}_linkedin.md
-├── Ảnh Trillion $ news/
-│   └── YYYY-MM-DD_{id}_{slug_keyword}.png
-└── logs/
-    └── YYYY-MM-DD.log
+auto-trillion-news-post/
+├── Trillion $ news(1).xlsx          # Input Excel file (updated in-place)
+├── Trillion $ news(1).backup.xlsx   # Automatically created backup
+├── images/                          # Downloaded Google Drive photos
+├── logs/                            # Real-time execution logs
+└── .browser_sessions/               # Playwright persistent contexts
+    ├── linkedin/
+    ├── facebook/
+    └── ...
 ```

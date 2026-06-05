@@ -1,135 +1,77 @@
 # Architecture
 
-The application stack and core surfaces have been selected for the Trillion News Auto Post System.
+The application stack and core surfaces for the Trillion News Auto Post System v2.
 
-## Product Stack & Surfaces
+---
 
-- **Product Surface**: CLI Tool (`main.py`)
+## 1. Product Stack & Surfaces
+
+- **Product Surfaces**:
+  - **CLI Surface**: Command-line entrypoint (`main.py`) for login management, manual posting, status checks, and scheduling.
+  - **Web UI Surface**: FastAPI web server with server-side rendered Jinja2 templates and HTMX for dynamic, real-time UI updates (defaulting to `http://localhost:8080`).
 - **Runtime Stack**: Python 3.11+
-- **Browser Scraper & Automation**: Playwright
-- **Storage & Output**: Local files (`output/Trillion $ news.xlsx` using `openpyxl`, text/markdown files for posts, and images/screenshots).
-- **AI Provider**: Google Gemini API using `gemini-1.5-flash` or `gemma-4` models.
+- **Browser Automation**: Playwright (using persistent browser contexts for session management).
+- **Excel Processing**: `openpyxl` for reading inputs and writing post links back.
+- **Image Downloading**: HTTP requests via `httpx` or `requests` for downloading Google Drive images.
+- **Scheduler**: `APScheduler` for managing scheduled background tasks.
+- **Storage & Output**:
+  - `Trillion $ news(1).xlsx` for content input and post link updates.
+  - Local SQLite database (optional, for persistent job scheduling & dashboard logs).
+  - `.browser_sessions/` directory for saving platform sessions.
 
-For context on these decisions, see [0007-technology-stack-gemini.md](file:///home/trung/Documents/2026/project/auto-trillion-news-post/docs/decisions/0007-technology-stack-gemini.md).
+---
 
-## Core Domain Identification
+## 2. Core Domain Identification
 
-The core business domains and data contracts for the Trillion News Auto Post System are:
+The domain components for the system are defined as follows:
 
-- **NewsItem**: Represents a harvested news article. Attributes include title, URL, source, snippet, publication date, image file reference, generated post reference, and workflow status (`new`, `generated`, `reviewed`, `posted`, `skipped`, `error`).
-- **FilterRule**: Domain rules for matching trillion-dollar-related keywords (e.g., case-insensitive checks for `trillion`, `trillion-dollar`, `$ trillion`, `USD ... trillion`).
-- **NewsScreenshot**: The visual artifact associated with a news article (stored locally as a PNG screenshot).
-- **SocialPost**: The generated social media post draft tailored for a target platform (e.g., LinkedIn). Consists of a target platform, 5 top hashtags (1 main industry + 4 relevant), English post body, and 5 fixed bottom hashtags.
-- **AppConfig**: The application's runtime configuration containing search providers, model selection, hashtags, and output directory settings.
+- **PostItem**: Represents a single news row loaded from the Excel sheet. Attributes include row ID, title, category (sheet name), local image path, Google Drive link, map of platforms to draft contents, and map of platforms to post results (URLs or error messages).
+- **PlatformSession**: Represents a browser session context for a social media platform. Tracks browser context directory, login status, and the date of the last successful verification.
+- **PostJob**: A execution instance representing a post run for selected rows and platforms. Tracks progress, start/end time, and intermediate results.
+- **ScheduledTask**: An entity defining a scheduled posting configuration (timezone, run times, sheets, platforms, limits) managed by the system scheduler.
 
-## Default Layering
+---
 
-```text
-domain
-  <- application
-      <- infrastructure
-          <- interface
-              <- app surfaces
-```
+## 3. Structural Layering
 
-## Candidate Structure
+The codebase follows a clean, modular structure split between the posting core, platforms, and the web interface:
 
 ```text
-app/
-  domain/
-    entities/
-    value-objects/
-    repositories/
-    services/
-
-  application/
-    commands/
-    queries/
-    handlers/
-
-  infrastructure/
-    database/
-    logging/
-    notifications/
-
-  interface/
-    controllers/
-    dto/
-    presenters/
-    routes/
-    middlewares/
-
-surfaces/
-  browser/
-  mobile/
-  desktop/
-  cli/
+auto-trillion-news-post/
+├── main.py                          # CLI and application entrypoint
+├── src/
+│   ├── config.py                    # Configuration loaders (.env & config.yaml)
+│   ├── models.py                    # Data classes (PostItem, PostJob, etc.)
+│   ├── excel_reader.py              # Parsing rows, stripping spaces, handling missing cols
+│   ├── excel_writer.py              # In-place sheet updates with locking/backups
+│   ├── image_downloader.py          # Google Drive sharing link conversion and storage
+│   ├── platform_base.py             # Abstract base poster class defining standard flows
+│   ├── platforms/                   # Specific browser automation workflows
+│   │   ├── linkedin.py
+│   │   ├── facebook.py
+│   │   ├── twitter.py
+│   │   └── ...
+│   ├── session_manager.py           # Browser context loading and login status checks
+│   ├── scheduler.py                 # Task queue and job execution logic
+│   └── web/                         # FastAPI web dashboard
+│       ├── app.py
+│       ├── routes.py
+│       ├── templates/
+│       └── static/
 ```
 
-This is a thinking template, not a scaffold. Create real folders only when a
-story enters implementation and the selected stack needs them.
+---
 
-## Dependency Rule
+## 4. Boundary Rules
 
-Inner layers must not depend on outer layers.
+### 4.1 Parse-First Boundary Rule
+Data boundary inputs must be sanitized before processing:
+- **Excel Headers**: Column names must be stripped of trailing/leading whitespaces (e.g. `'TikTok '` mapped to `'TikTok'`).
+- **Platform Content**: Values must be stripped. Empty cells, whitespace-only cells, and cells containing `.` are skipped.
+- **Missing Columns**: Triggers dynamic column creation if missing (e.g., adding `Link Post`).
+- **Google Drive URLs**: Sharing URLs must be parsed to extract the unique file ID before converting to direct download links.
 
-| Layer | May depend on | Must not depend on |
-| --- | --- | --- |
-| domain | nothing project-external except tiny pure utilities | framework, database, UI, provider, process/env |
-| application | domain | framework, UI, provider, database concrete clients |
-| infrastructure | domain, application | interface controllers or UI |
-| interface | all backend layers | UI state or platform shell assumptions |
-| app surfaces | API contracts and app-facing clients | domain internals directly |
-
-## Parse-First Boundary Rule
-
-Unknown data must be parsed at boundaries before it enters inner code.
-
-Boundaries include:
-
-- HTTP request bodies, params, and query strings.
-- Session payloads and identity claims.
-- Environment variables.
-- Database rows returned from external clients.
-- Platform shell payloads.
-- Deep links, tokens, and signed URLs.
-- Provider webhooks, events, and async payloads.
-
-Target flow:
-
-```text
-unknown input
-  -> parser
-  -> typed DTO or command
-  -> application use case
-  -> domain object/value object
-```
-
-Inner layers should work with meaningful product types such as `UserId`,
-`AccountId`, `WorkspaceId`, `Role`, `DateRange`, or domain-specific IDs,
-rather than repeatedly validating raw strings.
-
-## Command/Query Boundary
-
-If the product has both reads and writes, keep command/query separation clear at
-the code level even when the storage layer is simple:
-
-- Commands mutate state and own audit side effects.
-- Queries read state and format for consumers.
-- Shared domain rules live in domain/application, not controllers.
-
-## Observability Contract
-
-The future server should emit one canonical JSON log line per request with:
-
-- timestamp
-- level
-- request_id
-- user_id when known
-- action
-- duration_ms
-- status_code
-- message
-
-Audit logs are product records. Application logs are operational records. Do not
-use one as a substitute for the other.
+### 4.2 Dependency Rules
+- Platform-specific code must inherit from `PlatformBase` and not import Web UI elements.
+- Browser automation sessions are isolated per platform to avoid shared state cookies or cross-platform session pollution.
+- Changes to the Excel file must perform file-locking checks and save backups to prevent data loss if the file is open.

@@ -110,7 +110,23 @@ File có nhiều sheet, mỗi sheet là một chủ đề (category):
 | Charity & Tokenization | Tin tức về Charity, Tokenization |
 | *(thêm sheet mới theo nhu cầu)* | |
 
+### 6.3 Columns (mỗi sheet đều giống nhau)
+
+| Col | Header | Type | Description |
+|---:|---|---|---|
+| 1 | `#` | Number | ID tự tăng |
+| 2 | `Trillion $ news Title` | String | Tiêu đề tin tức |
+| 3 | `Image link` | URL | Link ảnh trên Google Drive |
+| 4 | `Linkedin` | String | Nội dung bài đăng LinkedIn |
+| 5 | `Facebook` | String | Nội dung bài đăng Facebook |
+| 6 | `X (Twitter)` | String | Nội dung bài đăng X/Twitter |
+| 7 | `Instagram` | String | Nội dung bài đăng Instagram |
+| 8 | `Pinterest` | String | Nội dung bài đăng Pinterest |
+| 9 | `Threads` | String | Nội dung bài đăng Threads |
+| 10 | `TikTok` | String | Nội dung bài đăng TikTok |
+| 11 | `YouTube` | String | Nội dung bài đăng YouTube |
 | 12 | `Link Post` | String | Link bài đăng sau khi post (output) |
+
 
 > [!NOTE]
 > **Lưu ý về dữ liệu thực tế trong file Excel:**
