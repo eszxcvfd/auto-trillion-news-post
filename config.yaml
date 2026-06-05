@@ -1,0 +1,28 @@
+# Default System Configuration
+platform: linkedin
+language: en
+
+search:
+  provider: bing
+  max_results_per_keyword: 10
+  require_terms:
+    - trillion
+    - trillion-dollar
+    - "$ trillion"
+    - "USD"
+  exclude_domains:
+    - reddit.com
+    - x.com
+    - facebook.com
+
+hashtags:
+  fixed_bottom:
+    - TAHKFoundation
+    - HenryUniverses
+    - USIran
+    - USTariffs
+    - Trump
+
+posting:
+  mode: draft_only
+  human_confirm_before_post: true
