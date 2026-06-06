@@ -3,6 +3,17 @@ harness.db
 harness.db-wal
 harness.db-shm
 
+# Private environment and local configuration files.
+.env
+.env.*
+*.local
+config.local.yaml
+config.local.yml
+config.local.json
+
+# Generated output artifacts.
+output/
+
 # Rust build output for harness tooling.
 target/
 dist/

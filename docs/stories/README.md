@@ -3,7 +3,10 @@
 Stories are work packets. They turn product intent into bounded implementation
 and validation work.
 
-No story packets are active yet.
+This repo now contains both:
+
+- implemented baseline story packets for `US-001` through `US-005`
+- planned brownfield rollout slices beginning with `US-006`
 
 ## Normal Story
 

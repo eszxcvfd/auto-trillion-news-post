@@ -1,22 +1,34 @@
 # Story Backlog
 
-This backlog lists the candidate epics for the Trillion News Auto Post System. 
+This backlog translates the approved `SPEC.md` release boundaries into
+candidate implementation slices.
 
-## v1 Epics (Archived/Implemented)
+## Active Brownfield Slices
 
-| Epic | Description | Status |
+| Story | Slice | Status |
 | --- | --- | --- |
-| E01 | Project Setup & CLI Init (Phase 1) | implemented |
-| E02 | Search & Filter News (Phase 2) | implemented |
-| E03 | Save to Excel & Image Screenshot (Phase 3) | implemented |
-| E04 | AI Post Generation (Phase 4) | implemented |
-| E05 | Assisted Social Posting (Phase 5) | implemented |
+| US-006 | Business workbook ingestion and dual-contract mapping | planned |
+| US-007 | Shared posting core plus `Link Post` parser/writer | planned |
+| US-008 | Result write-back, backup safety, and retry semantics | planned |
+| US-009 | Web UI operator surface | planned |
+| US-010 | Local scheduling and run history | planned |
 
-## v2 Epics (New Platform & Web UI - Planned)
+## Release Mapping
 
-| Epic | Description | Status |
+| Release | Main slices | Status |
 | --- | --- | --- |
-| E06 | Core Refactor & Input Parsing (v2 Phase 1) | planned |
-| E07 | Multi-Platform Posting Modules (v2 Phase 2) | planned |
-| E08 | Web UI Dashboard (v2 Phase 3) | planned |
-| E09 | Scheduled Posting & APScheduler (v2 Phase 4) | planned |
+| Release A | US-001 to US-005 baseline stabilization | implemented |
+| Release B1 | US-006, US-007, US-008 with LinkedIn/Facebook/X | planned |
+| Release B2 | Expand posting core to Instagram/Pinterest/Threads | planned |
+| Release B3 | TikTok and YouTube best-effort MVP modes | planned |
+| Release C | US-009 and US-010 | planned |
+
+## Historical Baseline
+
+| Story | Description | Status |
+| --- | --- | --- |
+| US-001 | Local Project Setup | implemented |
+| US-002 | Search & Filter Logic | implemented |
+| US-003 | Save to Excel and Screenshot | implemented |
+| US-004 | AI Post Generation | implemented |
+| US-005 | Assisted Posting | implemented |
