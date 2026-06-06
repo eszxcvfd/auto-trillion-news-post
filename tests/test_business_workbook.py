@@ -417,5 +417,47 @@ class TestBusinessWorkbook(unittest.TestCase):
         self.assertEqual(ws.cell(row=2, column=5).value, "Existing Facebook draft")
         wb.close()
 
+    @patch("src.ai_writer.generate_ai_post")
+    @patch("src.ai_writer.validate_generated_post")
+    def test_generate_drafts_for_business_excel_with_target_ids(self, mock_validate, mock_generate):
+        class MockConfig:
+            def __init__(self, excel_file, image_dir):
+                self.excel_file = excel_file
+                self.image_dir = image_dir
+                self.backup_enabled = False
+                self.default_platform = "linkedin"
+
+        mock_generate.side_effect = lambda title, source, snippet, url, platform, config: f"Generated draft for {platform} - {title}"
+        mock_validate.return_value = True
+        
+        # Create a business workbook with empty draft cells
+        config = MockConfig(
+            excel_file=os.path.join(self.test_dir, "test_generate_target_ids.xlsx"),
+            image_dir=self.test_dir
+        )
+        
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Payment"
+        headers = ["#", "Trillion $ news Title", "Image link", "Linkedin", "Facebook", "X (Twitter)", "Instagram", "Pinterest", "Threads", "TikTok", "YouTube", "Link Post"]
+        ws.append(headers)
+        # Add two rows with missing LinkedIn draft
+        ws.append([1, "Title 1", None, None, None, None, None, None, None, None, None, None])
+        ws.append([2, "Title 2", None, None, None, None, None, None, None, None, None, None])
+        wb.save(config.excel_file)
+        
+        # Run generation targeting only ID 2
+        generate_drafts_for_business_excel(config, limit=2, platform_option="linkedin", target_ids=[2])
+        
+        # Load and verify
+        wb = openpyxl.load_workbook(config.excel_file)
+        ws = wb["Payment"]
+        # LinkedIn column is 4th (1-based index)
+        # Row 2 (ID 1) should be None
+        self.assertIsNone(ws.cell(row=2, column=4).value)
+        # Row 3 (ID 2) should have the generated draft
+        self.assertEqual(ws.cell(row=3, column=4).value, "Generated draft for linkedin - Title 2")
+        wb.close()
+
 if __name__ == "__main__":
     unittest.main()

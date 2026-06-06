@@ -530,7 +530,7 @@ def save_news_to_business_excel(items: List[NewsItem], config, limit: Optional[i
     return saved_items
 
 
-def generate_drafts_for_business_excel(config, limit: Optional[int] = None, platform_option: Optional[str] = None):
+def generate_drafts_for_business_excel(config, limit: Optional[int] = None, platform_option: Optional[str] = None, target_ids: Optional[List[int]] = None):
     """
     Check all category sheets in the Business Workbook. Find rows where drafts are missing.
     Generate the missing platform drafts using Gemini and save directly in the Excel cell.
@@ -612,6 +612,17 @@ def generate_drafts_for_business_excel(config, limit: Optional[int] = None, plat
                 if limit is not None and rows_processed >= limit:
                     break
                     
+                # If target_ids is specified, only process matching rows
+                id_col_idx = col_map.get("#", 1)
+                row_id = ws.cell(row=row_idx, column=id_col_idx).value
+                try:
+                    row_id_int = int(row_id)
+                except (ValueError, TypeError):
+                    row_id_int = row_id
+                    
+                if target_ids is not None and row_id_int not in target_ids:
+                    continue
+                    
                 title_val = ws.cell(row=row_idx, column=title_col).value
                 title_norm = normalize_cell_content(title_val)
                 if not title_norm:
@@ -642,6 +653,41 @@ def generate_drafts_for_business_excel(config, limit: Optional[int] = None, plat
                         
                         ws.cell(row=row_idx, column=platform_cols[p]).value = content
                         generated_any = True
+                        
+                        # Generate post markdown file under output/posts/
+                        id_col_idx = col_map.get("#", 1)
+                        id_val = ws.cell(row=row_idx, column=id_col_idx).value
+                        try:
+                            id_val = int(id_val)
+                        except Exception:
+                            id_val = row_idx
+                            
+                        from datetime import datetime
+                        found_date = datetime.now().strftime("%Y-%m-%d")
+                        image_col_idx = col_map.get("image link", 3)
+                        image_val = ws.cell(row=row_idx, column=image_col_idx).value
+                        
+                        import re
+                        if image_val and "_" in image_val:
+                            parts = image_val.split("_")
+                            if len(parts) >= 1 and re.match(r'^\d{4}-\d{2}-\d{2}$', parts[0]):
+                                found_date = parts[0]
+                                
+                        from src.models import NewsItem
+                        from src.post_writer import write_post_file
+                        item = NewsItem(
+                            id=id_val,
+                            found_date=found_date,
+                            keyword=sheet_name,
+                            title=title_norm,
+                            image_file=image_val,
+                            platform=p,
+                            status="generated"
+                        )
+                        try:
+                            write_post_file(item, content, config)
+                        except Exception as post_write_err:
+                            print(f"[WARNING] Failed to write post file: {post_write_err}")
                         
                         if not validate_generated_post(content, p):
                             print(f"[WARNING] Generated draft for platform '{p}' failed validation checks.")

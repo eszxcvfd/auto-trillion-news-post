@@ -227,8 +227,9 @@ def execute_search(keywords_path: str, limit: int = None):
     # Format and print JSON
     dict_news = [item.to_dict() for item in saved_news]
     print(json.dumps(dict_news, indent=2, ensure_ascii=False))
+    return saved_news
 
-def execute_generate(platform: str = None, limit: int = None):
+def execute_generate(platform: str = None, limit: int = None, target_ids: list = None):
     config = AppConfig()
     
     # Load openpyxl safely
@@ -253,7 +254,7 @@ def execute_generate(platform: str = None, limit: int = None):
         
     if wb_type == "business":
         from src.business_workbook import generate_drafts_for_business_excel
-        generate_drafts_for_business_excel(config, limit=limit, platform_option=platform)
+        generate_drafts_for_business_excel(config, limit=limit, platform_option=platform, target_ids=target_ids)
         return
         
     try:
@@ -266,10 +267,19 @@ def execute_generate(platform: str = None, limit: int = None):
     # Read rows with status "new"
     new_items = []
     for r in range(2, ws.max_row + 1):
+        id_val = ws.cell(row=r, column=1).value
+        try:
+            current_id = int(id_val)
+        except (ValueError, TypeError):
+            current_id = id_val
+            
+        if target_ids is not None and current_id not in target_ids:
+            continue
+            
         status_val = ws.cell(row=r, column=13).value
         if status_val == "new":
             item = NewsItem(
-                id=ws.cell(row=r, column=1).value,
+                id=current_id,
                 found_date=ws.cell(row=r, column=2).value,
                 keyword=ws.cell(row=r, column=3).value,
                 title=ws.cell(row=r, column=4).value,
@@ -282,10 +292,6 @@ def execute_generate(platform: str = None, limit: int = None):
                 status="new",
                 notes=ws.cell(row=r, column=14).value
             )
-            try:
-                item.id = int(item.id)
-            except (ValueError, TypeError):
-                pass
             new_items.append(item)
             
     wb.close()
@@ -370,8 +376,9 @@ def execute_run(keywords_path: str, platform: str = None, limit: int = None):
         return
 
     print("=== Starting Full Draft Pipeline ===")
-    execute_search(keywords_path, limit)
-    execute_generate(platform, limit)
+    saved_news = execute_search(keywords_path, limit)
+    target_ids = [item.id for item in saved_news] if saved_news else None
+    execute_generate(platform, limit, target_ids=target_ids)
     print("=== Full Draft Pipeline Completed ===")
 
 def execute_post(item_id: int, platform: str = None, sheet: str = None):

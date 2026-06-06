@@ -20,11 +20,15 @@ def extract_top_hashtags(content: str) -> str:
     return " ".join(tags[:5])
 
 def write_post_file(item: NewsItem, content: str, config: AppConfig) -> str:
-    os.makedirs(config.post_dir, exist_ok=True)
+    post_dir = getattr(config, "post_dir", None)
+    if not post_dir:
+        output_dir = getattr(config, "output_dir", "./output")
+        post_dir = os.path.join(output_dir, "posts")
+    os.makedirs(post_dir, exist_ok=True)
     
     padded_id = f"{item.id:03d}" if isinstance(item.id, int) else str(item.id)
     filename = f"{item.found_date}_{padded_id}_{item.platform}.md"
-    filepath = os.path.join(config.post_dir, filename)
+    filepath = os.path.join(post_dir, filename)
     
     # Calculate relative image path
     img_relative = ""
