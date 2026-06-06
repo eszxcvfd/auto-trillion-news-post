@@ -180,11 +180,10 @@ def execute_search(keywords_path: str, limit: int = None):
     unique_news = deduplicate_news(filtered_news)
     print(f"[INFO] {len(unique_news)} articles remaining after deduplication.")
     
-    # Apply limit
-    if limit is not None:
-        unique_news = unique_news[:limit]
-    elif config.max_posts_per_run is not None:
-        unique_news = unique_news[:config.max_posts_per_run]
+    # Determine the save limit (to avoid saving too many new rows)
+    save_limit = limit
+    if save_limit is None and config.max_posts_per_run is not None:
+        save_limit = config.max_posts_per_run
         
     # Clean up unsaved temp files
     retained_temp_files = {item.image_file for item in unique_news if item.image_file and item.image_file.startswith("temp_")}
@@ -210,10 +209,10 @@ def execute_search(keywords_path: str, limit: int = None):
             
     if wb_type == "business":
         from src.business_workbook import save_news_to_business_excel
-        saved_news = save_news_to_business_excel(unique_news, config)
+        saved_news = save_news_to_business_excel(unique_news, config, limit=save_limit)
     else:
         from src.excel_store import save_news_to_excel
-        saved_news = save_news_to_excel(unique_news, config)
+        saved_news = save_news_to_excel(unique_news, config, limit=save_limit)
         
     # Final foolproof cleanup of all temp files that were not saved
     saved_filenames = {item.image_file for item in saved_news if item.image_file}

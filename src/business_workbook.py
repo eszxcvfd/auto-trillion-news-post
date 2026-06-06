@@ -366,7 +366,7 @@ def get_sheet_name_for_keyword(keyword: str, existing_sheets: List[str]) -> str:
     return kw_clean.title()
 
 
-def save_news_to_business_excel(items: List[NewsItem], config) -> List[NewsItem]:
+def save_news_to_business_excel(items: List[NewsItem], config, limit: Optional[int] = None) -> List[NewsItem]:
     """
     Save scraped news items to the Business Workbook (Contract B) in separate category sheets.
     """
@@ -417,6 +417,16 @@ def save_news_to_business_excel(items: List[NewsItem], config) -> List[NewsItem]
             return " ".join(t.split())
 
         for item in items:
+            if limit is not None and len(saved_items) >= limit:
+                if item.image_file and item.image_file.startswith("temp_"):
+                    temp_path = os.path.join(config.image_dir, item.image_file)
+                    if os.path.exists(temp_path):
+                        try:
+                            os.remove(temp_path)
+                        except Exception:
+                            pass
+                continue
+
             sheet_name = get_sheet_name_for_keyword(item.keyword or "Payment", wb.sheetnames)
             
             if sheet_name not in wb.sheetnames:

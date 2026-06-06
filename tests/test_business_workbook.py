@@ -346,6 +346,35 @@ class TestBusinessWorkbook(unittest.TestCase):
         
         wb.close()
 
+    def test_save_news_to_business_excel_with_limit(self):
+        class MockConfig:
+            def __init__(self, excel_file, image_dir):
+                self.excel_file = excel_file
+                self.image_dir = image_dir
+                self.backup_enabled = False
+                self.default_platform = "linkedin"
+
+        config = MockConfig(
+            excel_file=os.path.join(self.test_dir, "test_save_news_limit.xlsx"),
+            image_dir=self.test_dir
+        )
+        
+        items = [
+            NewsItem(id=None, title="Title 1", keyword="Payment services", url="https://test1.com"),
+            NewsItem(id=None, title="Title 2", keyword="Payment services", url="https://test2.com"),
+            NewsItem(id=None, title="Title 3", keyword="Payment services", url="https://test3.com")
+        ]
+        
+        saved = save_news_to_business_excel(items, config, limit=2)
+        self.assertEqual(len(saved), 2)
+        self.assertEqual(saved[0].title, "Title 1")
+        self.assertEqual(saved[1].title, "Title 2")
+        
+        wb = openpyxl.load_workbook(config.excel_file)
+        ws = wb["Payment"]
+        self.assertEqual(ws.max_row, 3) # Header + 2 rows
+        wb.close()
+
     from unittest.mock import patch
     
     @patch("src.ai_writer.generate_ai_post")

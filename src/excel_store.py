@@ -58,7 +58,7 @@ def slugify(text: str) -> str:
     text = re.sub(r'_+', '_', text)
     return text.strip('_')
 
-def save_news_to_excel(items: list[NewsItem], config: AppConfig) -> list[NewsItem]:
+def save_news_to_excel(items: list[NewsItem], config: AppConfig, limit: int = None) -> list[NewsItem]:
     filepath = config.excel_file
     
     if openpyxl is None:
@@ -83,6 +83,16 @@ def save_news_to_excel(items: list[NewsItem], config: AppConfig) -> list[NewsIte
                 existing_urls.add(url_val.strip().lower())
                 
         for item in items:
+            if limit is not None and len(saved_items) >= limit:
+                if item.image_file and item.image_file.startswith("temp_"):
+                    temp_path = os.path.join(config.image_dir, item.image_file)
+                    if os.path.exists(temp_path):
+                        try:
+                            os.remove(temp_path)
+                        except Exception:
+                            pass
+                continue
+
             if item.url and item.url.strip().lower() in existing_urls:
                 # Delete temp image if duplicate
                 if item.image_file and item.image_file.startswith("temp_"):
