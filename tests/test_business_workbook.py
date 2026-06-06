@@ -416,6 +416,12 @@ class TestBusinessWorkbook(unittest.TestCase):
         # Facebook draft (5th column) remains untouched
         self.assertEqual(ws.cell(row=2, column=5).value, "Existing Facebook draft")
         wb.close()
+        
+        # Verify that the post markdown file was also generated!
+        from datetime import datetime
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        expected_post_file = os.path.join(self.test_dir, "posts", f"{today_str}_001_linkedin.md")
+        self.assertTrue(os.path.exists(expected_post_file))
 
     @patch("src.ai_writer.generate_ai_post")
     @patch("src.ai_writer.validate_generated_post")
@@ -458,6 +464,15 @@ class TestBusinessWorkbook(unittest.TestCase):
         # Row 3 (ID 2) should have the generated draft
         self.assertEqual(ws.cell(row=3, column=4).value, "Generated draft for linkedin - Title 2")
         wb.close()
+        
+        # Verify that only the targeted post markdown file was generated!
+        from datetime import datetime
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        expected_post_file_2 = os.path.join(self.test_dir, "posts", f"{today_str}_002_linkedin.md")
+        self.assertTrue(os.path.exists(expected_post_file_2))
+        
+        unexpected_post_file_1 = os.path.join(self.test_dir, "posts", f"{today_str}_001_linkedin.md")
+        self.assertFalse(os.path.exists(unexpected_post_file_1))
 
 if __name__ == "__main__":
     unittest.main()

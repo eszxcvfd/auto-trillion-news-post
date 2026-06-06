@@ -22,8 +22,12 @@ def extract_top_hashtags(content: str) -> str:
 def write_post_file(item: NewsItem, content: str, config: AppConfig) -> str:
     post_dir = getattr(config, "post_dir", None)
     if not post_dir:
-        output_dir = getattr(config, "output_dir", "./output")
-        post_dir = os.path.join(output_dir, "posts")
+        excel_file = getattr(config, "excel_file", None)
+        if excel_file:
+            post_dir = os.path.join(os.path.dirname(excel_file), "posts")
+        else:
+            output_dir = getattr(config, "output_dir", "./output")
+            post_dir = os.path.join(output_dir, "posts")
     os.makedirs(post_dir, exist_ok=True)
     
     padded_id = f"{item.id:03d}" if isinstance(item.id, int) else str(item.id)
