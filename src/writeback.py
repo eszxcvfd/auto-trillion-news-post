@@ -24,10 +24,24 @@ class BackupFailureError(IOError):
 
 def is_workbook_locked(filepath: str) -> bool:
     """
-    Check if the workbook is locked by attempting to open it in read-write mode.
+    Check if the workbook is locked by checking OS file locks and common office lock files.
     """
     if not os.path.exists(filepath):
         return False
+
+    # 1. Check for LibreOffice/OpenOffice lock file (common on Linux/macOS)
+    dir_name = os.path.dirname(filepath) or "."
+    base_name = os.path.basename(filepath)
+    libreoffice_lock = os.path.join(dir_name, f".~lock.{base_name}#")
+    if os.path.exists(libreoffice_lock):
+        return True
+
+    # 2. Check for MS Office temporary lock file (common on macOS/Linux/Windows)
+    ms_office_lock = os.path.join(dir_name, f"~${base_name}")
+    if os.path.exists(ms_office_lock):
+        return True
+
+    # 3. Check for mandatory OS-level file lock (e.g. Windows sharing violation)
     try:
         # Open in read-write mode without truncating
         with open(filepath, "r+"):

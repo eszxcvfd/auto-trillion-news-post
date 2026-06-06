@@ -82,8 +82,11 @@ def save_news_to_excel(items: list[NewsItem], config: AppConfig, limit: int = No
             if url_val:
                 existing_urls.add(url_val.strip().lower())
                 
+        saved_counts_per_keyword = {}
         for item in items:
-            if limit is not None and len(saved_items) >= limit:
+            kw = item.keyword or "Payment"
+            saved_count = saved_counts_per_keyword.get(kw, 0)
+            if limit is not None and saved_count >= limit:
                 if item.image_file and item.image_file.startswith("temp_"):
                     temp_path = os.path.join(config.image_dir, item.image_file)
                     if os.path.exists(temp_path):
@@ -151,6 +154,7 @@ def save_news_to_excel(items: list[NewsItem], config: AppConfig, limit: int = No
             ]
             ws.append(row_data)
             saved_items.append(item)
+            saved_counts_per_keyword[kw] = saved_count + 1
             
         wb.save(filepath)
         if saved_items:

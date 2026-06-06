@@ -56,11 +56,30 @@ class TestWriteback(unittest.TestCase):
 
     def test_is_workbook_locked(self):
         self.assertFalse(is_workbook_locked(self.workbook_path))
-        
-        # Simulate locking by opening in write mode and keeping open
-        # On Linux, simple file open doesn't block other opens unless flock is used, 
-        # but we can test that is_workbook_locked works on normal files
         self.assertFalse(is_workbook_locked("nonexistent_file.xlsx"))
+        
+        dir_name = os.path.dirname(self.workbook_path) or "."
+        base_name = os.path.basename(self.workbook_path)
+        
+        # 1. Test LibreOffice lock file
+        libreoffice_lock = os.path.join(dir_name, f".~lock.{base_name}#")
+        with open(libreoffice_lock, "w") as f:
+            f.write("lock details")
+        try:
+            self.assertTrue(is_workbook_locked(self.workbook_path))
+        finally:
+            if os.path.exists(libreoffice_lock):
+                os.remove(libreoffice_lock)
+                
+        # 2. Test MS Office lock file
+        ms_office_lock = os.path.join(dir_name, f"~${base_name}")
+        with open(ms_office_lock, "w") as f:
+            f.write("lock details")
+        try:
+            self.assertTrue(is_workbook_locked(self.workbook_path))
+        finally:
+            if os.path.exists(ms_office_lock):
+                os.remove(ms_office_lock)
 
     def test_create_workbook_backup(self):
         backup_path = create_workbook_backup(self.workbook_path)

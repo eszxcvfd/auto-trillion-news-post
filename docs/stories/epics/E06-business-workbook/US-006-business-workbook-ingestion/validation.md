@@ -13,6 +13,7 @@ Proof must show:
 - title-based row filtering works
 - content-cell normalization works
 - missing `Link Post` does not block ingestion
+- draft file path resolution resolves markdown files listed in platform cells to actual post content
 - business workbook row modeling stays separate from the legacy internal
   workbook model
 
@@ -20,7 +21,7 @@ Proof must show:
 
 | Layer | Cases |
 | --- | --- |
-| Unit | Normalize headers; map required columns; treat whitespace and `.` as no content; preserve raw `Link Post` text; retain sheet/category context. |
+| Unit | Normalize headers; map required columns; treat whitespace and `.` as no content; resolve draft file paths to markdown content; preserve raw `Link Post` text; retain sheet/category context. |
 | Integration | Read a fixture `Trillion $ news.xlsx` with multiple sheets and mixed-validity rows; verify skipped rows, parsed rows, and clear errors. |
 | E2E | Not required for this story if CLI/UI surface is only wiring to the ingestion service without new user-visible posting behavior. |
 | Platform | Not required; no browser automation should be introduced in this story. |

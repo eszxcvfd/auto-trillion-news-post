@@ -26,6 +26,7 @@ After this story is complete, the system should be able to:
 - preserve sheet name as category context
 - treat operator-edited draft text in Excel as the final input for later
   posting work
+- resolve local draft markdown file paths in platform cells to actual post content during ingestion
 - coexist with the legacy internal workbook contract without forcing the
   operator to manage both manually
 

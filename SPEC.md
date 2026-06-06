@@ -486,14 +486,15 @@ Pipeline B phải:
 - Bỏ qua row không có title hợp lệ.
 - Trim header và trim content.
 - Xác định platform cần đăng dựa trên draft content và `Link Post`.
-- Xem nội dung đang có trong Excel là nội dung cuối cùng để post, kể cả khi người dùng đã sửa tay sau bước generate.
+- Xem nội dung đang có trong Excel (hoặc nội dung trong file Markdown được trỏ tới bởi đường dẫn file local trong ô) là nội dung cuối cùng để post, kể cả khi người dùng đã sửa tay.
+- Tự động phân giải (resolve) đường dẫn file draft Markdown trong các cột nền tảng thành nội dung bài viết hoàn chỉnh trên ổ đĩa.
 
 Acceptance Criteria:
 
 - Given workbook có nhiều sheet hợp lệ, when ingest chạy, then hệ thống đọc được tất cả row có title hợp lệ.
 - Given header có whitespace thừa, when parse workbook, then mapping header vẫn thành công.
 - Given row có content là `.`, when xác định platform cần đăng, then platform đó bị skip.
-- Given operator sửa draft trong Excel sau bước generate, when posting bắt đầu, then hệ thống dùng bản draft đã sửa trong Excel.
+- Given operator sửa draft trong Excel hoặc ghi đường dẫn file draft Markdown, when posting bắt đầu, then hệ thống phân giải và sử dụng nội dung bài viết tương ứng.
 
 ### FR-07 — Image Resolution
 

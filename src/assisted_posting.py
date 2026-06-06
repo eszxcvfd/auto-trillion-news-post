@@ -323,6 +323,10 @@ def run_assisted_posting(item: NewsItem, config: AppConfig, post_content: str = 
             ans = input("Did you successfully publish the post? [y/N]: ").strip().lower()
             success = ans in ["y", "yes"]
             
+            if success:
+                url_input = input("Enter the post URL (optional, press Enter to use '[posted-no-link]'): ").strip()
+                item.post_url = url_input
+                
             return success
             
         except Exception as e:

@@ -216,6 +216,24 @@ def ingest_business_workbook(filepath: str, sheet_scope: Optional[List[str]] = N
                             row_data[attr_name] = parse_row_id(val)
                         elif attr_name == "title":
                             row_data[attr_name] = normalize_cell_content(val)
+                        elif attr_name in ["linkedin_draft", "facebook_draft", "x_draft", "instagram_draft", "pinterest_draft", "threads_draft", "tiktok_draft", "youtube_draft"]:
+                            cell_str = normalize_cell_content(val)
+                            if cell_str:
+                                test_paths = [
+                                    cell_str,
+                                    os.path.join(os.path.dirname(filepath), cell_str) if filepath else "",
+                                ]
+                                resolved_content = None
+                                for p in test_paths:
+                                    if p and os.path.exists(p) and os.path.isfile(p):
+                                        from src.assisted_posting import parse_post_markdown
+                                        parsed = parse_post_markdown(p)
+                                        if parsed:
+                                            resolved_content = parsed
+                                            break
+                                row_data[attr_name] = resolved_content if resolved_content is not None else cell_str
+                            else:
+                                row_data[attr_name] = None
                         else:
                             row_data[attr_name] = normalize_cell_content(val)
                             
@@ -336,34 +354,19 @@ def map_news_item_to_business_row(news_item: NewsItem, row_idx: int) -> Business
 
 def get_sheet_name_for_keyword(keyword: str, existing_sheets: List[str]) -> str:
     """
-    Map scraped news keywords to sheet names (e.g. 'Payment services trillion $' -> 'Payment').
-    If no sheet matches, create a title-cased keyword sheet.
+    Map scraped news keywords to sheet names.
+    The sheet name should be exactly the keyword, cleaned and truncated to 31 characters.
     """
-    import re
     kw_clean = keyword.strip()
-    
-    # Helper to normalize for comparison
-    def normalize_for_match(text: str) -> str:
-        t = text.lower()
-        t = re.sub(r'[^a-z0-9\s]', ' ', t)
-        return " ".join(t.split())
-        
-    kw_norm = normalize_for_match(kw_clean)
-    if not kw_norm:
-        return kw_clean.title()
-        
-    # Check matches using normalized strings
+    # Excel sheet titles are case-insensitive and limited to 31 characters.
+    # Check if there is an existing sheet that matches case-insensitively first to preserve original sheet casing.
     for sheet in existing_sheets:
-        if sheet.lower() in ["sheet", "sheet1", "instructions", "compatibility"]:
-            continue
-        sheet_norm = normalize_for_match(sheet)
-        if not sheet_norm:
-            continue
-        if sheet_norm in kw_norm or kw_norm in sheet_norm:
+        if sheet.lower() == kw_clean.lower() or (len(kw_clean) > 31 and sheet.lower() == kw_clean[:31].lower()):
             return sheet
             
-    # Fallback to Title-cased keyword
-    return kw_clean.title()
+    if len(kw_clean) > 31:
+        kw_clean = kw_clean[:31]
+    return kw_clean
 
 
 def save_news_to_business_excel(items: List[NewsItem], config, limit: Optional[int] = None) -> List[NewsItem]:
@@ -416,8 +419,12 @@ def save_news_to_business_excel(items: List[NewsItem], config, limit: Optional[i
             t = re.sub(r'[^a-z0-9\s]', '', t)
             return " ".join(t.split())
 
+        saved_counts_per_sheet = {}
         for item in items:
-            if limit is not None and len(saved_items) >= limit:
+            sheet_name = get_sheet_name_for_keyword(item.keyword or "Payment", wb.sheetnames)
+            saved_count = saved_counts_per_sheet.get(sheet_name, 0)
+            
+            if limit is not None and saved_count >= limit:
                 if item.image_file and item.image_file.startswith("temp_"):
                     temp_path = os.path.join(config.image_dir, item.image_file)
                     if os.path.exists(temp_path):
@@ -426,8 +433,6 @@ def save_news_to_business_excel(items: List[NewsItem], config, limit: Optional[i
                         except Exception:
                             pass
                 continue
-
-            sheet_name = get_sheet_name_for_keyword(item.keyword or "Payment", wb.sheetnames)
             
             if sheet_name not in wb.sheetnames:
                 ws = wb.create_sheet(title=sheet_name)
@@ -481,6 +486,7 @@ def save_news_to_business_excel(items: List[NewsItem], config, limit: Optional[i
             next_id = max_id + 1
                     
             item.id = next_id
+            item.keyword = sheet_name
             if not item.found_date:
                 from datetime import datetime
                 item.found_date = datetime.now().strftime("%Y-%m-%d")
@@ -520,7 +526,18 @@ def save_news_to_business_excel(items: List[NewsItem], config, limit: Optional[i
             item.status = "new"
             item.platform = config.default_platform
             saved_items.append(item)
+            saved_counts_per_sheet[sheet_name] = saved_count + 1
             
+        # Clean up empty placeholder sheets if we have other valid sheets
+        placeholder_names = ["sheet", "sheet1", "payment", "charity & tokenization"]
+        non_placeholder_sheets = [name for name in wb.sheetnames if name.lower() not in placeholder_names]
+        if non_placeholder_sheets:
+            for name in list(wb.sheetnames):
+                if name.lower() in placeholder_names:
+                    ws_check = wb[name]
+                    if ws_check.max_row <= 1:
+                        wb.remove(ws_check)
+                        
         wb.save(filepath)
         if saved_items:
             print(f"[SUCCESS] Appended {len(saved_items)} new articles to Business Workbook sheets.")
@@ -608,8 +625,9 @@ def generate_drafts_for_business_excel(config, limit: Optional[int] = None, plat
                 if plat_norm in col_map:
                     platform_cols[simp_name] = col_map[plat_norm]
                     
+            rows_processed_for_sheet = 0
             for row_idx in range(2, ws.max_row + 1):
-                if limit is not None and rows_processed >= limit:
+                if limit is not None and rows_processed_for_sheet >= limit:
                     break
                     
                 # If target_ids is specified, only process matching rows
@@ -620,8 +638,18 @@ def generate_drafts_for_business_excel(config, limit: Optional[int] = None, plat
                 except (ValueError, TypeError):
                     row_id_int = row_id
                     
-                if target_ids is not None and row_id_int not in target_ids:
-                    continue
+                if target_ids is not None:
+                    is_match = False
+                    for target in target_ids:
+                        if isinstance(target, (tuple, list)):
+                            if len(target) == 2 and str(target[0]).lower() == str(sheet_name).lower() and target[1] == row_id_int:
+                                is_match = True
+                                break
+                        elif target == row_id_int:
+                            is_match = True
+                            break
+                    if not is_match:
+                        continue
                     
                 title_val = ws.cell(row=row_idx, column=title_col).value
                 title_norm = normalize_cell_content(title_val)
@@ -650,9 +678,6 @@ def generate_drafts_for_business_excel(config, limit: Optional[int] = None, plat
                             platform=p,
                             config=config
                         )
-                        
-                        ws.cell(row=row_idx, column=platform_cols[p]).value = content
-                        generated_any = True
                         
                         # Generate post markdown file under output/posts/
                         id_col_idx = col_map.get("#", 1)
@@ -684,10 +709,15 @@ def generate_drafts_for_business_excel(config, limit: Optional[int] = None, plat
                             platform=p,
                             status="generated"
                         )
+                        post_filepath = None
                         try:
-                            write_post_file(item, content, config)
+                            post_filepath = write_post_file(item, content, config)
                         except Exception as post_write_err:
                             print(f"[WARNING] Failed to write post file: {post_write_err}")
+                            
+                        # Save the generated post file path in the Excel cell (fallback to content if file writing failed)
+                        ws.cell(row=row_idx, column=platform_cols[p]).value = post_filepath or content
+                        generated_any = True
                         
                         if not validate_generated_post(content, p):
                             print(f"[WARNING] Generated draft for platform '{p}' failed validation checks.")
@@ -695,10 +725,8 @@ def generate_drafts_for_business_excel(config, limit: Optional[int] = None, plat
                         print(f"[ERROR] Failed to generate draft for platform '{p}' on row {row_idx}: {e}")
                         
                 if generated_any:
+                    rows_processed_for_sheet += 1
                     rows_processed += 1
-                    
-            if limit is not None and rows_processed >= limit:
-                break
                 
         wb.save(filepath)
         print(f"[SUCCESS] Generation complete. Generated drafts for {rows_processed} rows.")

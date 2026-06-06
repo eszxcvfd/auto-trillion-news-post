@@ -198,6 +198,35 @@ class TestBusinessWorkbook(unittest.TestCase):
         # Check warnings
         self.assertTrue(any("Row 3 in sheet 'Payment' skipped" in w for w in warnings))
         self.assertTrue(any("Instructions' does not appear to be a category posting sheet" in w for w in warnings))
+    def test_ingest_business_workbook_with_filepath_drafts(self):
+        # Create a temporary markdown file for the draft
+        post_dir = os.path.join(self.test_dir, "posts")
+        os.makedirs(post_dir, exist_ok=True)
+        post_path = os.path.join(post_dir, "2026-06-06_101_linkedin.md")
+        with open(post_path, "w", encoding="utf-8") as f:
+            f.write("# Post 101 — Linkedin\n\n## News\n\nTitle: Test news title\n\n## Generated Post\n\nHello from the markdown draft file!")
+            
+        # Create a valid Business Workbook with the path to the markdown file in LinkedIn column
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Payment"
+        ws.append([
+            "#", "Trillion $ news Title", "Image link", "Linkedin", 
+            "Facebook", "X (Twitter)", "Instagram", "Pinterest", 
+            "Threads", "TikTok", "YouTube", "Link Post"
+        ])
+        ws.append([
+            101, "Test news title", None, 
+            post_path, # LinkedIn (cell contains file path)
+            None, None, None, None, None, None, None, None
+        ])
+        excel_path = os.path.join(self.test_dir, "test_ingest_filepaths.xlsx")
+        wb.save(excel_path)
+        
+        # Run ingestion
+        rows, warnings = ingest_business_workbook(excel_path)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0].linkedin_draft, "Hello from the markdown draft file!")
 
     def test_ingest_business_workbook_missing_link_post_tolerated(self):
         # Create a business workbook where Link Post column is completely missing
@@ -267,9 +296,10 @@ class TestBusinessWorkbook(unittest.TestCase):
 
     def test_get_sheet_name_for_keyword(self):
         existing = ["Payment", "Charity & Tokenization", "Instructions"]
-        self.assertEqual(get_sheet_name_for_keyword("Payment services", existing), "Payment")
-        self.assertEqual(get_sheet_name_for_keyword("Charity tokenization", existing), "Charity & Tokenization")
-        self.assertEqual(get_sheet_name_for_keyword("AI trillion dollar market", existing), "Ai Trillion Dollar Market")
+        self.assertEqual(get_sheet_name_for_keyword("Payment services", existing), "Payment services")
+        self.assertEqual(get_sheet_name_for_keyword("Charity tokenization", existing), "Charity tokenization")
+        self.assertEqual(get_sheet_name_for_keyword("AI trillion dollar market", existing), "AI trillion dollar market")
+        self.assertEqual(get_sheet_name_for_keyword("Healthcare trillion dollar market", existing), "Healthcare trillion dollar mark")
 
     def test_save_news_to_business_excel(self):
         class MockConfig:
@@ -326,10 +356,10 @@ class TestBusinessWorkbook(unittest.TestCase):
         
         # Load workbook and check sheet contents
         wb = openpyxl.load_workbook(config.excel_file)
-        self.assertIn("Payment", wb.sheetnames)
+        self.assertIn("Payment services", wb.sheetnames)
         self.assertIn("Charity & Tokenization", wb.sheetnames)
         
-        ws_pay = wb["Payment"]
+        ws_pay = wb["Payment services"]
         self.assertEqual(ws_pay.max_row, 2)  # Header + 1 row
         self.assertEqual(ws_pay.cell(row=2, column=1).value, 1)
         self.assertEqual(ws_pay.cell(row=2, column=2).value, "First Unique Title")
@@ -371,7 +401,8 @@ class TestBusinessWorkbook(unittest.TestCase):
         self.assertEqual(saved[1].title, "Title 2")
         
         wb = openpyxl.load_workbook(config.excel_file)
-        ws = wb["Payment"]
+        self.assertIn("Payment services", wb.sheetnames)
+        ws = wb["Payment services"]
         self.assertEqual(ws.max_row, 3) # Header + 2 rows
         wb.close()
 
@@ -411,17 +442,20 @@ class TestBusinessWorkbook(unittest.TestCase):
         # Load and verify
         wb = openpyxl.load_workbook(config.excel_file)
         ws = wb["Payment"]
-        # LinkedIn column is 4th (1-based index)
-        self.assertEqual(ws.cell(row=2, column=4).value, "Generated draft for linkedin - Merchant Payments Title")
+        # LinkedIn column is 4th (1-based index) and should contain the post file path
+        linkedin_cell_val = ws.cell(row=2, column=4).value
+        self.assertIn("_001_", linkedin_cell_val)
+        self.assertTrue(linkedin_cell_val.endswith("_linkedin.md"))
+        self.assertTrue(os.path.exists(linkedin_cell_val))
+        
+        # Verify markdown content contains the draft
+        with open(linkedin_cell_val, "r", encoding="utf-8") as f:
+            post_content = f.read()
+            self.assertIn("Generated draft for linkedin - Merchant Payments Title", post_content)
+            
         # Facebook draft (5th column) remains untouched
         self.assertEqual(ws.cell(row=2, column=5).value, "Existing Facebook draft")
         wb.close()
-        
-        # Verify that the post markdown file was also generated!
-        from datetime import datetime
-        today_str = datetime.now().strftime("%Y-%m-%d")
-        expected_post_file = os.path.join(self.test_dir, "posts", f"{today_str}_001_linkedin.md")
-        self.assertTrue(os.path.exists(expected_post_file))
 
     @patch("src.ai_writer.generate_ai_post")
     @patch("src.ai_writer.validate_generated_post")
@@ -461,18 +495,64 @@ class TestBusinessWorkbook(unittest.TestCase):
         # LinkedIn column is 4th (1-based index)
         # Row 2 (ID 1) should be None
         self.assertIsNone(ws.cell(row=2, column=4).value)
-        # Row 3 (ID 2) should have the generated draft
-        self.assertEqual(ws.cell(row=3, column=4).value, "Generated draft for linkedin - Title 2")
+        # Row 3 (ID 2) should have the generated draft file path
+        linkedin_cell_val = ws.cell(row=3, column=4).value
+        self.assertIn("_002_", linkedin_cell_val)
+        self.assertTrue(linkedin_cell_val.endswith("_linkedin.md"))
+        self.assertTrue(os.path.exists(linkedin_cell_val))
+        
+        with open(linkedin_cell_val, "r", encoding="utf-8") as f:
+            post_content = f.read()
+            self.assertIn("Generated draft for linkedin - Title 2", post_content)
         wb.close()
+
+    @patch("src.ai_writer.generate_ai_post")
+    @patch("src.ai_writer.validate_generated_post")
+    def test_generate_drafts_for_business_excel_with_sheet_scoped_target_ids(self, mock_validate, mock_generate):
+        class MockConfig:
+            def __init__(self, excel_file, image_dir):
+                self.excel_file = excel_file
+                self.image_dir = image_dir
+                self.backup_enabled = False
+                self.default_platform = "linkedin"
+
+        mock_generate.side_effect = lambda title, source, snippet, url, platform, config: f"Generated draft for {platform} - {title}"
+        mock_validate.return_value = True
         
-        # Verify that only the targeted post markdown file was generated!
-        from datetime import datetime
-        today_str = datetime.now().strftime("%Y-%m-%d")
-        expected_post_file_2 = os.path.join(self.test_dir, "posts", f"{today_str}_002_linkedin.md")
-        self.assertTrue(os.path.exists(expected_post_file_2))
+        config = MockConfig(
+            excel_file=os.path.join(self.test_dir, "test_generate_sheet_scoped.xlsx"),
+            image_dir=self.test_dir
+        )
         
-        unexpected_post_file_1 = os.path.join(self.test_dir, "posts", f"{today_str}_001_linkedin.md")
-        self.assertFalse(os.path.exists(unexpected_post_file_1))
+        wb = openpyxl.Workbook()
+        
+        # Create two sheets, both having rows with same numeric ID
+        ws1 = wb.active
+        ws1.title = "Payment"
+        headers = ["#", "Trillion $ news Title", "Image link", "Linkedin", "Facebook", "X (Twitter)", "Instagram", "Pinterest", "Threads", "TikTok", "YouTube", "Link Post"]
+        ws1.append(headers)
+        ws1.append([1, "Payment Title 1", None, None, None, None, None, None, None, None, None, None])
+        
+        ws2 = wb.create_sheet(title="Fintech")
+        ws2.append(headers)
+        ws2.append([1, "Fintech Title 1", None, None, None, None, None, None, None, None, None, None])
+        
+        wb.save(config.excel_file)
+        
+        # Target only ID 1 in sheet 'Fintech'; sheet 'Payment' ID 1 should not be processed
+        generate_drafts_for_business_excel(config, limit=2, platform_option="linkedin", target_ids=[("Fintech", 1)])
+        
+        # Load and verify
+        wb = openpyxl.load_workbook(config.excel_file)
+        # Payment sheet (not targeted) should be None
+        self.assertIsNone(wb["Payment"].cell(row=2, column=4).value)
+        # Fintech sheet (targeted) should have the generated draft file path
+        linkedin_cell_val = wb["Fintech"].cell(row=2, column=4).value
+        self.assertIn("_001_", linkedin_cell_val)
+        self.assertTrue(linkedin_cell_val.endswith("_linkedin.md"))
+        self.assertTrue(os.path.exists(linkedin_cell_val))
+        
+        wb.close()
 
 if __name__ == "__main__":
     unittest.main()

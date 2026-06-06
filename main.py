@@ -302,9 +302,17 @@ def execute_generate(platform: str = None, limit: int = None, target_ids: list =
         
     print(f"[INFO] Found {len(new_items)} new articles to process.")
     
-    # Apply limit
+    # Apply limit per keyword
     if limit is not None:
-        new_items = new_items[:limit]
+        limited_items = []
+        kw_counts = {}
+        for item in new_items:
+            kw = item.keyword or "Payment"
+            count = kw_counts.get(kw, 0)
+            if count < limit:
+                limited_items.append(item)
+                kw_counts[kw] = count + 1
+        new_items = limited_items
     elif config.max_posts_per_run is not None:
         new_items = new_items[:config.max_posts_per_run]
         
@@ -377,7 +385,25 @@ def execute_run(keywords_path: str, platform: str = None, limit: int = None):
 
     print("=== Starting Full Draft Pipeline ===")
     saved_news = execute_search(keywords_path, limit)
-    target_ids = [item.id for item in saved_news] if saved_news else None
+    
+    # Check workbook type to format target_ids correctly
+    config = AppConfig()
+    filepath = config.excel_file
+    wb_type = "business"
+    if os.path.exists(filepath):
+        from src.business_workbook import detect_workbook_type
+        try:
+            wb_type = detect_workbook_type(filepath)
+        except Exception:
+            wb_type = "legacy"
+            
+    target_ids = None
+    if saved_news:
+        if wb_type == "business":
+            target_ids = [(item.keyword, item.id) for item in saved_news]
+        else:
+            target_ids = [item.id for item in saved_news]
+            
     execute_generate(platform, limit, target_ids=target_ids)
     print("=== Full Draft Pipeline Completed ===")
 
@@ -421,10 +447,24 @@ def execute_post(item_id: int, platform: str = None, sheet: str = None):
             print(f"[ERROR] Row with ID {item_id} not found in the Business Workbook.")
             sys.exit(1)
             
-        # If multiple sheets have the same ID, notify and choose the first one
         row = matching_rows[0]
         if len(matching_rows) > 1:
-            print(f"[INFO] Multiple rows matching ID {item_id} found across sheets. Using the match in sheet '{row.sheet_name}'...")
+            print(f"[INFO] Multiple rows matching ID {item_id} found across sheets:")
+            for idx, r in enumerate(matching_rows):
+                print(f"  {idx + 1}. Sheet: '{r.sheet_name}', Title: '{r.title}'")
+            try:
+                choice = input(f"Select which row you want to post (1-{len(matching_rows)}, default 1): ").strip()
+                if choice:
+                    choice_idx = int(choice) - 1
+                    if 0 <= choice_idx < len(matching_rows):
+                        row = matching_rows[choice_idx]
+                        print(f"[INFO] Selected match in sheet '{row.sheet_name}'.")
+                    else:
+                        print(f"[WARNING] Invalid selection. Using default match in sheet '{row.sheet_name}'.")
+                else:
+                    print(f"[INFO] No selection. Using default match in sheet '{row.sheet_name}'.")
+            except (EOFError, ValueError, IndexError, KeyboardInterrupt):
+                print(f"[INFO] Using default match in sheet '{row.sheet_name}'.")
             
         try:
             platform_key = canonicalize_platform(platform)
@@ -442,6 +482,21 @@ def execute_post(item_id: int, platform: str = None, sheet: str = None):
             print(f"[ERROR] No draft content for platform '{platform}' found in sheet '{row.sheet_name}' at Row {row.row_idx} (ID: {item_id}). Please run generate first.")
             sys.exit(1)
             
+        # Resolve draft_content if it is stored as a file path
+        if draft_content and isinstance(draft_content, str):
+            test_paths = [
+                draft_content,
+                os.path.join(os.path.dirname(filepath), draft_content) if filepath else "",
+                os.path.join(config.post_dir, os.path.basename(draft_content)) if hasattr(config, "post_dir") else ""
+            ]
+            for p in test_paths:
+                if p and os.path.exists(p) and os.path.isfile(p):
+                    from src.assisted_posting import parse_post_markdown
+                    parsed = parse_post_markdown(p)
+                    if parsed:
+                        draft_content = parsed
+                        break
+            
         # Construct NewsItem wrapper for run_assisted_posting
         item = NewsItem(
             id=row.id,
@@ -455,7 +510,7 @@ def execute_post(item_id: int, platform: str = None, sheet: str = None):
         success = run_assisted_posting(item, config, post_content=draft_content)
         
         if success:
-            url_input = input("Enter the post URL (optional, press Enter to use '[posted-no-link]'): ").strip()
+            url_input = getattr(item, "post_url", "").strip()
             status_val = url_input if url_input else "[posted-no-link]"
             
             try:

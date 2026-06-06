@@ -21,6 +21,7 @@ Business rules:
 - missing `Link Post` is tolerated on read
 - malformed headers fail clearly
 - operator-edited workbook values are authoritative for later posting work
+- local draft markdown file paths in platform cells are automatically resolved by reading and parsing the markdown file
 
 ## Application Flow
 
@@ -36,7 +37,7 @@ Expected application flow:
 2. iterate valid sheets
 3. normalize headers
 4. read rows with a valid title
-5. normalize draft cell values
+5. normalize draft cell values and resolve markdown draft file paths to actual post text if present
 6. attach raw `Link Post` text without yet enforcing per-platform semantics
 7. return typed workbook/sheet/row objects for later posting-core work
 

@@ -31,7 +31,18 @@ def write_post_file(item: NewsItem, content: str, config: AppConfig) -> str:
     os.makedirs(post_dir, exist_ok=True)
     
     padded_id = f"{item.id:03d}" if isinstance(item.id, int) else str(item.id)
-    filename = f"{item.found_date}_{padded_id}_{item.platform}.md"
+    slug_kw = ""
+    if item.keyword:
+        import re
+        kw_clean = item.keyword.lower()
+        kw_clean = re.sub(r'[^a-z0-9_]', '_', kw_clean)
+        kw_clean = re.sub(r'_+', '_', kw_clean)
+        slug_kw = kw_clean.strip('_')
+        
+    if slug_kw:
+        filename = f"{item.found_date}_{padded_id}_{slug_kw}_{item.platform}.md"
+    else:
+        filename = f"{item.found_date}_{padded_id}_{item.platform}.md"
     filepath = os.path.join(post_dir, filename)
     
     # Calculate relative image path

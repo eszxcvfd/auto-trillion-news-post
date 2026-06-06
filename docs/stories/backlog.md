@@ -7,9 +7,9 @@ candidate implementation slices.
 
 | Story | Slice | Status |
 | --- | --- | --- |
-| US-006 | Business workbook ingestion and dual-contract mapping | planned |
-| US-007 | Shared posting core plus `Link Post` parser/writer | planned |
-| US-008 | Result write-back, backup safety, and retry semantics | planned |
+| US-006 | Business workbook ingestion and dual-contract mapping | implemented |
+| US-007 | Shared posting core plus `Link Post` parser/writer | implemented |
+| US-008 | Result write-back, backup safety, and retry semantics | implemented |
 | US-009 | Web UI operator surface | planned |
 | US-010 | Local scheduling and run history | planned |
 
@@ -18,7 +18,7 @@ candidate implementation slices.
 | Release | Main slices | Status |
 | --- | --- | --- |
 | Release A | US-001 to US-005 baseline stabilization | implemented |
-| Release B1 | US-006, US-007, US-008 with LinkedIn/Facebook/X | planned |
+| Release B1 | US-006, US-007, US-008 with LinkedIn/Facebook/X | implemented |
 | Release B2 | Expand posting core to Instagram/Pinterest/Threads | planned |
 | Release B3 | TikTok and YouTube best-effort MVP modes | planned |
 | Release C | US-009 and US-010 | planned |
