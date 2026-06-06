@@ -150,6 +150,15 @@ def execute_search(keywords_path: str, limit: int = None):
     # Load configuration
     config = AppConfig()
     
+    # Pre-clean existing temp files in the image directory from previous runs
+    if os.path.exists(config.image_dir):
+        for f in os.listdir(config.image_dir):
+            if f.startswith("temp_"):
+                try:
+                    os.remove(os.path.join(config.image_dir, f))
+                except Exception:
+                    pass
+    
     # Load keywords
     keywords = load_keywords(keywords_path)
     if not keywords:
@@ -176,6 +185,18 @@ def execute_search(keywords_path: str, limit: int = None):
         unique_news = unique_news[:limit]
     elif config.max_posts_per_run is not None:
         unique_news = unique_news[:config.max_posts_per_run]
+        
+    # Clean up unsaved temp files
+    retained_temp_files = {item.image_file for item in unique_news if item.image_file and item.image_file.startswith("temp_")}
+    for item in all_raw_news:
+        if item.image_file and item.image_file.startswith("temp_"):
+            if item.image_file not in retained_temp_files:
+                temp_path = os.path.join(config.image_dir, item.image_file)
+                if os.path.exists(temp_path):
+                    try:
+                        os.remove(temp_path)
+                    except Exception:
+                        pass
         
     # Save to Excel and rename temp screenshots
     filepath = config.excel_file
