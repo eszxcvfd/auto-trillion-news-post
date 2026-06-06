@@ -19,11 +19,12 @@ class AppConfig:
         # Load environment variables first
         load_dotenv(env_path)
         
-        # Load YAML configuration if exists
         self.yaml_config = {}
         if os.path.exists(yaml_path):
             with open(yaml_path, "r", encoding="utf-8") as f:
-                self.yaml_config = yaml.safe_load(f) or {}
+                loaded = yaml.safe_load(f)
+                if isinstance(loaded, dict):
+                    self.yaml_config = loaded
 
         # AI Configuration
         self.ai_provider = os.getenv("AI_PROVIDER", self.yaml_config.get("ai_provider", "gemini"))
@@ -68,6 +69,16 @@ class AppConfig:
         posting_cfg = self.yaml_config.get("posting", {})
         self.posting_mode = posting_cfg.get("mode", "draft_only")
         self.human_confirm_before_post = posting_cfg.get("human_confirm_before_post", True)
+        
+        # Backup configuration
+        backup_val = os.getenv("BACKUP_ENABLED")
+        if backup_val is not None:
+            self.backup_enabled = backup_val.lower() == "true"
+        else:
+            self.backup_enabled = posting_cfg.get("backup_enabled", True)
+            if isinstance(self.backup_enabled, str):
+                self.backup_enabled = self.backup_enabled.lower() == "true"
+
 
     def _detect_browser_executable(self) -> str | None:
         configured_path = os.getenv("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH", "").strip()

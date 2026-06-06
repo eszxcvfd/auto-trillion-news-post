@@ -106,6 +106,27 @@ def init_project():
             os.makedirs(directory, exist_ok=True)
             print(f"[SUCCESS] Created directory {directory}")
             
+    # Initialize Business Workbook if it doesn't exist
+    config = AppConfig()
+    filepath = config.excel_file
+    if os.path.exists(filepath):
+        print(f"[INFO] Workbook '{filepath}' already exists, skipping.")
+    else:
+        try:
+            import openpyxl
+            wb = openpyxl.Workbook()
+            ws = wb.active
+            ws.title = "Payment"
+            headers = ["#", "Trillion $ news Title", "Image link", "Linkedin", "Facebook", "X (Twitter)", "Instagram", "Pinterest", "Threads", "TikTok", "YouTube", "Link Post"]
+            ws.append(headers)
+            # Create a secondary default category sheet
+            ws2 = wb.create_sheet(title="Charity & Tokenization")
+            ws2.append(headers)
+            wb.save(filepath)
+            print(f"[SUCCESS] Initialized new Business Workbook at {filepath}")
+        except Exception as e:
+            print(f"[WARNING] Failed to initialize Excel workbook: {e}")
+            
     print("Project initialization complete.")
 
 def load_keywords(filepath: str) -> list[str]:
@@ -157,8 +178,21 @@ def execute_search(keywords_path: str, limit: int = None):
         unique_news = unique_news[:config.max_posts_per_run]
         
     # Save to Excel and rename temp screenshots
-    from src.excel_store import save_news_to_excel
-    saved_news = save_news_to_excel(unique_news, config)
+    filepath = config.excel_file
+    wb_type = "business"  # default if file doesn't exist
+    if os.path.exists(filepath):
+        from src.business_workbook import detect_workbook_type
+        try:
+            wb_type = detect_workbook_type(filepath)
+        except Exception:
+            wb_type = "legacy"
+            
+    if wb_type == "business":
+        from src.business_workbook import save_news_to_business_excel
+        saved_news = save_news_to_business_excel(unique_news, config)
+    else:
+        from src.excel_store import save_news_to_excel
+        saved_news = save_news_to_excel(unique_news, config)
     
     # Format and print JSON
     dict_news = [item.to_dict() for item in saved_news]
@@ -180,6 +214,17 @@ def execute_generate(platform: str = None, limit: int = None):
     if not os.path.exists(filepath):
         print(f"[ERROR] Excel file '{filepath}' does not exist. Please run search first.")
         sys.exit(1)
+        
+    from src.business_workbook import detect_workbook_type
+    try:
+        wb_type = detect_workbook_type(filepath)
+    except Exception:
+        wb_type = "legacy"
+        
+    if wb_type == "business":
+        from src.business_workbook import generate_drafts_for_business_excel
+        generate_drafts_for_business_excel(config, limit=limit, platform_option=platform)
+        return
         
     try:
         wb = openpyxl.load_workbook(filepath)
@@ -375,6 +420,151 @@ def execute_post(item_id: int, platform: str = None):
             update_excel_row_with_post(item_id=item_id, status="skipped", config=config)
             print(f"[SUCCESS] Post {item_id} successfully marked as 'skipped' in Excel.")
 
+def execute_inspect_workbook(
+    workbook_path: str = None, 
+    sheet: str = None, 
+    as_json: bool = False,
+    as_plan: bool = False,
+    limit: int = 2,
+    platforms_str: str = ""
+):
+    from src.business_workbook import detect_workbook_type, ingest_business_workbook
+    from src.posting_core import build_posting_plan
+    config = AppConfig()
+    filepath = workbook_path or config.excel_file
+    
+    if not os.path.exists(filepath):
+        print(f"[ERROR] Excel file '{filepath}' does not exist.")
+        sys.exit(1)
+        
+    try:
+        wb_type = detect_workbook_type(filepath)
+    except Exception as e:
+        print(f"[ERROR] Detection failed: {e}")
+        sys.exit(1)
+        
+    print(f"Workbook Path: {filepath}")
+    print(f"Detected Type: {wb_type.upper()} WORKBOOK (Contract {'A' if wb_type == 'legacy' else 'B'})")
+    print("-" * 50)
+    
+    if wb_type == "legacy":
+        print("[INFO] This is a legacy Contract A workbook. To inspect, please use standard generate/post commands or convert it.")
+        return
+        
+    # It's a business workbook!
+    sheet_scope = [sheet] if sheet else None
+    try:
+        rows, warnings = ingest_business_workbook(filepath, sheet_scope=sheet_scope)
+    except Exception as e:
+        print(f"[ERROR] Failed to ingest business workbook: {e}")
+        sys.exit(1)
+        
+    if warnings:
+        print("Warnings/Parse Info:")
+        for w in warnings:
+            print(f"  - {w}")
+        print("-" * 50)
+        
+    if as_plan:
+        # Generate the plan
+        p_list = [p.strip() for p in platforms_str.split(",") if p.strip()]
+        try:
+            plan = build_posting_plan(rows, p_list, limit_per_platform=limit)
+        except Exception as e:
+            print(f"[ERROR] Failed to build posting plan: {e}")
+            sys.exit(1)
+            
+        if as_json:
+            import json
+            print(json.dumps(plan.to_dict(), indent=2, ensure_ascii=False))
+        else:
+            print(f"POSTING PLAN (Limit: {limit} posts per platform)")
+            print("=" * 60)
+            
+            for platform, candidates in plan.candidates.items():
+                platform_display = platform.upper()
+                print(f"\nPlatform: {platform_display}")
+                print("-" * 30)
+                if not candidates:
+                    print("  No eligible candidates to post.")
+                else:
+                    for idx, c in enumerate(candidates):
+                        print(f"  {idx + 1}. [Sheet: {c.sheet_name}, Row {c.row_idx}, ID: {c.id}]")
+                        print(f"     Title: {c.title}")
+                        print(f"     Image: {c.image_link}")
+                        # Show a short snippet of draft content
+                        draft_snippet = c.draft_content.replace('\n', ' ')
+                        if len(draft_snippet) > 80:
+                            draft_snippet = draft_snippet[:80] + "..."
+                        print(f"     Draft: {draft_snippet}")
+                print("-" * 30)
+                
+            if plan.skipped_summary:
+                print("\nSkipped/Excluded rows details:")
+                print("=" * 40)
+                for skip_info in plan.skipped_summary:
+                    print(f"  - {skip_info}")
+    else:
+        if as_json:
+            # Print JSON output
+            import json
+            dict_rows = [r.to_dict() for r in rows]
+            print(json.dumps(dict_rows, indent=2, ensure_ascii=False))
+        else:
+            # Print human-readable output
+            print(f"Total category rows parsed: {len(rows)}")
+            current_sheet = None
+            for r in rows:
+                if r.sheet_name != current_sheet:
+                    current_sheet = r.sheet_name
+                    print(f"\nSheet: [{current_sheet}]")
+                    print("=" * 40)
+                
+                # Print row summary
+                has_content_list = []
+                for plat in ['linkedin', 'facebook', 'x', 'instagram', 'pinterest', 'threads', 'tiktok', 'youtube']:
+                    draft_val = getattr(r, f"{plat}_draft")
+                    if draft_val:
+                        has_content_list.append(plat)
+                        
+                platforms_str_val = ", ".join(has_content_list) if has_content_list else "None"
+                print(f"Row {r.row_idx} (ID: {r.id}): {r.title}")
+                print(f"  Image Link: {r.image_link}")
+                print(f"  Drafts for: {platforms_str_val}")
+                if r.link_post_raw:
+                    print("  Link Post State:")
+                    for line in r.link_post_raw.splitlines():
+                        print(f"    {line}")
+                print("-" * 40)
+
+def execute_write_result(
+    sheet: str,
+    row: int,
+    platform: str,
+    status: str,
+    workbook: str = None,
+    no_backup: bool = False
+):
+    from src.writeback import write_post_result
+    config = AppConfig()
+    filepath = workbook or config.excel_file
+    backup_enabled = not no_backup and config.backup_enabled
+    
+    try:
+        new_val = write_post_result(
+            workbook_path=filepath,
+            sheet_name=sheet,
+            row_idx=row,
+            platform=platform,
+            status_value=status,
+            backup_enabled=backup_enabled
+        )
+        print(f"[SUCCESS] Wrote post result to sheet '{sheet}', row {row}, platform '{platform}'.")
+        print(f"New Link Post value:\n{new_val}")
+    except Exception as e:
+        print(f"[ERROR] Failed to write result: {e}")
+        sys.exit(1)
+
 def main():
     parser = argparse.ArgumentParser(description="Trillion News Auto Post System CLI")
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
@@ -403,6 +593,24 @@ def main():
     post_parser.add_argument("--id", type=int, required=True, help="Row ID from Excel to post")
     post_parser.add_argument("--platform", default=None, help="Target social platform (e.g. linkedin)")
 
+    # inspect-workbook command
+    inspect_parser = subparsers.add_parser("inspect-workbook", help="Inspect and validate a Business Workbook")
+    inspect_parser.add_argument("--workbook", default=None, help="Path to the business workbook file")
+    inspect_parser.add_argument("--sheet", default=None, help="Optional specific sheet/category to inspect")
+    inspect_parser.add_argument("--json", action="store_true", help="Output in structured JSON format")
+    inspect_parser.add_argument("--plan", action="store_true", help="Generate and inspect the posting plan (dry-run)")
+    inspect_parser.add_argument("--limit", type=int, default=2, help="Posting limit per platform (default: 2)")
+    inspect_parser.add_argument("--platforms", default="linkedin,facebook,x,instagram,pinterest,threads,tiktok,youtube", help="Comma-separated platforms to plan for")
+
+    # write-result command
+    write_parser = subparsers.add_parser("write-result", help="Manually write a posting result to a row")
+    write_parser.add_argument("--sheet", required=True, help="Name of the sheet/category")
+    write_parser.add_argument("--row", type=int, required=True, help="1-based row index in the sheet")
+    write_parser.add_argument("--platform", required=True, help="Target platform name (e.g. linkedin)")
+    write_parser.add_argument("--status", required=True, help="Status value to write (URL or tag)")
+    write_parser.add_argument("--workbook", default=None, help="Path to the business workbook file")
+    write_parser.add_argument("--no-backup", action="store_true", help="Disable timestamped workbook backup before write")
+
     args = parser.parse_args()
     
     if args.command == "init":
@@ -415,8 +623,27 @@ def main():
         execute_run(args.keywords, args.platform, args.limit)
     elif args.command == "post":
         execute_post(args.id, args.platform)
+    elif args.command == "inspect-workbook":
+        execute_inspect_workbook(
+            workbook_path=args.workbook,
+            sheet=args.sheet,
+            as_json=args.json,
+            as_plan=args.plan,
+            limit=args.limit,
+            platforms_str=args.platforms
+        )
+    elif args.command == "write-result":
+        execute_write_result(
+            sheet=args.sheet,
+            row=args.row,
+            platform=args.platform,
+            status=args.status,
+            workbook=args.workbook,
+            no_backup=args.no_backup
+        )
     else:
         parser.print_help()
 
 if __name__ == "__main__":
     main()
+
