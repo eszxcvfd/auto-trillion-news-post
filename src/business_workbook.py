@@ -457,13 +457,18 @@ def save_news_to_business_excel(items: List[NewsItem], config) -> List[NewsItem]
                 continue
                 
             id_col = col_map.get("#", 1)
-            next_id = 1
-            if ws.max_row > 1:
-                last_val = ws.cell(row=ws.max_row, column=id_col).value
-                try:
-                    next_id = int(float(last_val)) + 1
-                except (ValueError, TypeError):
-                    next_id = ws.max_row
+            # Find the maximum numeric ID currently in the sheet to ensure contiguous assignment
+            max_id = 0
+            for r in range(2, ws.max_row + 1):
+                val = ws.cell(row=r, column=id_col).value
+                if val is not None:
+                    try:
+                        numeric_id = int(float(val))
+                        if numeric_id > max_id:
+                            max_id = numeric_id
+                    except (ValueError, TypeError):
+                        pass
+            next_id = max_id + 1
                     
             item.id = next_id
             if not item.found_date:

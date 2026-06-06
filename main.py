@@ -214,6 +214,16 @@ def execute_search(keywords_path: str, limit: int = None):
     else:
         from src.excel_store import save_news_to_excel
         saved_news = save_news_to_excel(unique_news, config)
+        
+    # Final foolproof cleanup of all temp files that were not saved
+    saved_filenames = {item.image_file for item in saved_news if item.image_file}
+    if os.path.exists(config.image_dir):
+        for f in os.listdir(config.image_dir):
+            if f.startswith("temp_") and f not in saved_filenames:
+                try:
+                    os.remove(os.path.join(config.image_dir, f))
+                except Exception:
+                    pass
     
     # Format and print JSON
     dict_news = [item.to_dict() for item in saved_news]

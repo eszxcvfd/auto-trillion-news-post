@@ -38,14 +38,17 @@ def init_excel_file(filepath: str):
         raise
 
 def get_next_id(sheet) -> int:
-    if sheet.max_row <= 1:
-        return 1
-    # Check the last row's first column (ID)
-    last_val = sheet.cell(row=sheet.max_row, column=1).value
-    try:
-        return int(last_val) + 1
-    except (ValueError, TypeError):
-        return sheet.max_row
+    max_id = 0
+    for r in range(2, sheet.max_row + 1):
+        val = sheet.cell(row=r, column=1).value
+        if val is not None:
+            try:
+                numeric_id = int(float(val))
+                if numeric_id > max_id:
+                    max_id = numeric_id
+            except (ValueError, TypeError):
+                pass
+    return max_id + 1
 
 import re
 
