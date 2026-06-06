@@ -28,7 +28,7 @@ def parse_post_markdown(filepath: str) -> str:
     post_body = content[idx + len(marker):].strip()
     return post_body
 
-def run_assisted_posting(item: NewsItem, config: AppConfig) -> bool:
+def run_assisted_posting(item: NewsItem, config: AppConfig, post_content: str = None) -> bool:
     """
     Launches Playwright in non-headless mode, opens LinkedIn,
     pastes the post draft, uploads the screenshot (if exists),
@@ -39,11 +39,13 @@ def run_assisted_posting(item: NewsItem, config: AppConfig) -> bool:
         return False
 
     # 1. Parse post content
-    if not item.generated_post_file:
-        print(f"[ERROR] No generated post file path found for ID {item.id}.")
-        return False
+    if post_content is None:
+        if not item.generated_post_file:
+            print(f"[ERROR] No generated post file path found for ID {item.id}.")
+            return False
+            
+        post_content = parse_post_markdown(item.generated_post_file)
         
-    post_content = parse_post_markdown(item.generated_post_file)
     if not post_content:
         print(f"[ERROR] Empty post content for ID {item.id}.")
         return False

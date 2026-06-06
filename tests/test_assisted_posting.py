@@ -178,5 +178,43 @@ This is the strategically insightful post body.
         result = run_assisted_posting(item, self.config)
         self.assertFalse(result)
 
+    @patch("src.assisted_posting.sync_playwright")
+    @patch("builtins.input")
+    def test_run_assisted_posting_direct_content_mock(self, mock_input, mock_sync_playwright):
+        mock_input.return_value = "y"
+        
+        mock_p = MagicMock()
+        mock_context = MagicMock()
+        mock_page = MagicMock()
+        mock_context.pages = [mock_page]
+        mock_p.chromium.launch_persistent_context.return_value = mock_context
+        
+        mock_cm = MagicMock()
+        mock_cm.__enter__.return_value = mock_p
+        mock_sync_playwright.return_value = mock_cm
+        
+        # Mock elements
+        mock_start_post_btn = MagicMock()
+        mock_start_post_btn.is_visible.return_value = True
+        
+        mock_editor = MagicMock()
+        mock_editor.is_visible.return_value = True
+        
+        def query_selector_side_effect(selector):
+            if "share-box-feed-entry" in selector or "Start a post" in selector:
+                return mock_start_post_btn
+            if "ql-editor" in selector or "textbox" in selector:
+                return mock_editor
+            return None
+            
+        mock_page.query_selector.side_effect = query_selector_side_effect
+        mock_page.url = "https://www.linkedin.com/feed/"
+        
+        item = NewsItem(id=1, generated_post_file=None)
+        
+        result = run_assisted_posting(item, self.config, post_content="Direct post content")
+        self.assertTrue(result)
+        mock_page.fill.assert_called_with(unittest.mock.ANY, "Direct post content")
+
 if __name__ == "__main__":
     unittest.main()

@@ -365,7 +365,7 @@ def execute_run(keywords_path: str, platform: str = None, limit: int = None):
     execute_generate(platform, limit)
     print("=== Full Draft Pipeline Completed ===")
 
-def execute_post(item_id: int, platform: str = None):
+def execute_post(item_id: int, platform: str = None, sheet: str = None):
     config = AppConfig()
     
     try:
@@ -381,65 +381,157 @@ def execute_post(item_id: int, platform: str = None):
         print(f"[ERROR] Excel file '{filepath}' does not exist. Please run search/generate first.")
         sys.exit(1)
         
+    from src.business_workbook import detect_workbook_type
     try:
-        wb = openpyxl.load_workbook(filepath)
-        ws = wb.active
-    except Exception as e:
-        print(f"[ERROR] Failed to load Excel workbook: {e}")
-        sys.exit(1)
+        wb_type = detect_workbook_type(filepath)
+    except Exception:
+        wb_type = "legacy"
         
-    item = None
-    for r in range(2, ws.max_row + 1):
-        id_val = ws.cell(row=r, column=1).value
+    if wb_type == "business":
+        from src.business_workbook import ingest_business_workbook
+        from src.posting_core import canonicalize_platform, PLATFORM_ATTRS
+        from src.writeback import write_post_result
+        from src.assisted_posting import run_assisted_posting
+        
+        sheet_scope = [sheet] if sheet else None
         try:
-            current_id = int(id_val)
-        except (ValueError, TypeError):
-            current_id = id_val
+            rows, warnings = ingest_business_workbook(filepath, sheet_scope=sheet_scope)
+        except Exception as e:
+            print(f"[ERROR] Failed to ingest business workbook: {e}")
+            sys.exit(1)
             
-        if current_id == item_id:
-            item = NewsItem(
-                id=current_id,
-                found_date=ws.cell(row=r, column=2).value,
-                keyword=ws.cell(row=r, column=3).value,
-                title=ws.cell(row=r, column=4).value,
-                source=ws.cell(row=r, column=5).value,
-                url=ws.cell(row=r, column=6).value,
-                snippet=ws.cell(row=r, column=7).value,
-                published_text=ws.cell(row=r, column=8).value,
-                image_file=ws.cell(row=r, column=9).value,
-                platform=platform,
-                top_hashtags=ws.cell(row=r, column=11).value,
-                generated_post_file=ws.cell(row=r, column=12).value,
-                status=ws.cell(row=r, column=13).value,
-                notes=ws.cell(row=r, column=14).value
-            )
-            break
+        matching_rows = [r for r in rows if r.id == item_id]
+        if not matching_rows:
+            print(f"[ERROR] Row with ID {item_id} not found in the Business Workbook.")
+            sys.exit(1)
             
-    wb.close()
-    
-    if not item:
-        print(f"[ERROR] Article with ID {item_id} not found in Excel.")
-        sys.exit(1)
+        # If multiple sheets have the same ID, notify and choose the first one
+        row = matching_rows[0]
+        if len(matching_rows) > 1:
+            print(f"[INFO] Multiple rows matching ID {item_id} found across sheets. Using the match in sheet '{row.sheet_name}'...")
+            
+        try:
+            platform_key = canonicalize_platform(platform)
+        except ValueError as e:
+            print(f"[ERROR] {e}")
+            sys.exit(1)
+            
+        attr_name = PLATFORM_ATTRS.get(platform_key)
+        if not attr_name:
+            print(f"[ERROR] No attribute mapping for platform '{platform}'")
+            sys.exit(1)
+            
+        draft_content = getattr(row, attr_name, None)
+        if not draft_content:
+            print(f"[ERROR] No draft content for platform '{platform}' found in sheet '{row.sheet_name}' at Row {row.row_idx} (ID: {item_id}). Please run generate first.")
+            sys.exit(1)
+            
+        # Construct NewsItem wrapper for run_assisted_posting
+        item = NewsItem(
+            id=row.id,
+            title=row.title,
+            image_file=row.image_link,
+            platform=platform,
+            status="new"
+        )
         
-    if not item.generated_post_file or not os.path.exists(item.generated_post_file):
-        print(f"[ERROR] No generated post file found for ID {item_id}. Please run generate first.")
-        sys.exit(1)
+        print(f"[INFO] Launching assisted posting for ID {item_id} on '{platform}' [Sheet: {row.sheet_name}, Row: {row.row_idx}]: '{item.title}'")
+        success = run_assisted_posting(item, config, post_content=draft_content)
         
-    from src.assisted_posting import run_assisted_posting
-    from src.post_writer import update_excel_row_with_post
-    
-    print(f"[INFO] Launching assisted posting for ID {item_id}: '{item.title}'")
-    success = run_assisted_posting(item, config)
-    
-    if success:
-        update_excel_row_with_post(item_id=item_id, status="posted", config=config)
-        print(f"[SUCCESS] Post {item_id} successfully marked as 'posted' in Excel.")
+        if success:
+            url_input = input("Enter the post URL (optional, press Enter to use '[posted-no-link]'): ").strip()
+            status_val = url_input if url_input else "[posted-no-link]"
+            
+            try:
+                write_post_result(
+                    workbook_path=filepath,
+                    sheet_name=row.sheet_name,
+                    row_idx=row.row_idx,
+                    platform=platform,
+                    status_value=status_val,
+                    backup_enabled=config.backup_enabled
+                )
+                print(f"[SUCCESS] Post result successfully written to Link Post in sheet '{row.sheet_name}', row {row.row_idx}.")
+            except Exception as e:
+                print(f"[ERROR] Failed to write post result back to Excel: {e}")
+        else:
+            print(f"[INFO] Post {item_id} was not marked as posted.")
+            ans_skip = input("Do you want to mark this item as skipped? [y/N]: ").strip().lower()
+            if ans_skip in ["y", "yes"]:
+                try:
+                    write_post_result(
+                        workbook_path=filepath,
+                        sheet_name=row.sheet_name,
+                        row_idx=row.row_idx,
+                        platform=platform,
+                        status_value="[skip] skipped by operator",
+                        backup_enabled=config.backup_enabled
+                    )
+                    print(f"[SUCCESS] Post successfully marked as skipped in sheet '{row.sheet_name}', row {row.row_idx}.")
+                except Exception as e:
+                    print(f"[ERROR] Failed to write skip status to Excel: {e}")
+                    
     else:
-        print(f"[INFO] Post {item_id} was not marked as posted.")
-        ans_skip = input("Do you want to mark this item as skipped? [y/N]: ").strip().lower()
-        if ans_skip in ["y", "yes"]:
-            update_excel_row_with_post(item_id=item_id, status="skipped", config=config)
-            print(f"[SUCCESS] Post {item_id} successfully marked as 'skipped' in Excel.")
+        # Legacy Contract A flow
+        try:
+            wb = openpyxl.load_workbook(filepath)
+            ws = wb.active
+        except Exception as e:
+            print(f"[ERROR] Failed to load Excel workbook: {e}")
+            sys.exit(1)
+            
+        item = None
+        for r in range(2, ws.max_row + 1):
+            id_val = ws.cell(row=r, column=1).value
+            try:
+                current_id = int(id_val)
+            except (ValueError, TypeError):
+                current_id = id_val
+                
+            if current_id == item_id:
+                item = NewsItem(
+                    id=current_id,
+                    found_date=ws.cell(row=r, column=2).value,
+                    keyword=ws.cell(row=r, column=3).value,
+                    title=ws.cell(row=r, column=4).value,
+                    source=ws.cell(row=r, column=5).value,
+                    url=ws.cell(row=r, column=6).value,
+                    snippet=ws.cell(row=r, column=7).value,
+                    published_text=ws.cell(row=r, column=8).value,
+                    image_file=ws.cell(row=r, column=9).value,
+                    platform=platform,
+                    top_hashtags=ws.cell(row=r, column=11).value,
+                    generated_post_file=ws.cell(row=r, column=12).value,
+                    status=ws.cell(row=r, column=13).value,
+                    notes=ws.cell(row=r, column=14).value
+                )
+                break
+                
+        wb.close()
+        
+        if not item:
+            print(f"[ERROR] Article with ID {item_id} not found in Excel.")
+            sys.exit(1)
+            
+        if not item.generated_post_file or not os.path.exists(item.generated_post_file):
+            print(f"[ERROR] No generated post file found for ID {item_id}. Please run generate first.")
+            sys.exit(1)
+            
+        from src.assisted_posting import run_assisted_posting
+        from src.post_writer import update_excel_row_with_post
+        
+        print(f"[INFO] Launching assisted posting for ID {item_id}: '{item.title}'")
+        success = run_assisted_posting(item, config)
+        
+        if success:
+            update_excel_row_with_post(item_id=item_id, status="posted", config=config)
+            print(f"[SUCCESS] Post {item_id} successfully marked as 'posted' in Excel.")
+        else:
+            print(f"[INFO] Post {item_id} was not marked as posted.")
+            ans_skip = input("Do you want to mark this item as skipped? [y/N]: ").strip().lower()
+            if ans_skip in ["y", "yes"]:
+                update_excel_row_with_post(item_id=item_id, status="skipped", config=config)
+                print(f"[SUCCESS] Post {item_id} successfully marked as 'skipped' in Excel.")
 
 def execute_inspect_workbook(
     workbook_path: str = None, 
@@ -613,6 +705,7 @@ def main():
     post_parser = subparsers.add_parser("post", help="Assisted posting on social platforms")
     post_parser.add_argument("--id", type=int, required=True, help="Row ID from Excel to post")
     post_parser.add_argument("--platform", default=None, help="Target social platform (e.g. linkedin)")
+    post_parser.add_argument("--sheet", default=None, help="Optional specific sheet/category name for Business Workbook")
 
     # inspect-workbook command
     inspect_parser = subparsers.add_parser("inspect-workbook", help="Inspect and validate a Business Workbook")
@@ -643,7 +736,7 @@ def main():
     elif args.command == "run":
         execute_run(args.keywords, args.platform, args.limit)
     elif args.command == "post":
-        execute_post(args.id, args.platform)
+        execute_post(args.id, args.platform, args.sheet)
     elif args.command == "inspect-workbook":
         execute_inspect_workbook(
             workbook_path=args.workbook,
