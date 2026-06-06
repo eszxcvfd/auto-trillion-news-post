@@ -1,22 +1,22 @@
 # Product Docs
 
-This directory is intentionally generic and mostly empty in Harness v0.
+These files are the living product surface derived from
+[SPEC.md](/home/trung/Documents/2026/project/auto-trillion-news-post/SPEC.md).
 
-When a user provides a project spec, derive smaller product contract files here
-instead of keeping one large spec as the living plan. Name files by the product
-domains that actually exist in that spec, for example `overview.md`,
-`billing.md`, `workflows.md`, `permissions.md`, or `api-conventions.md`.
+Current product docs:
 
-Do not create domain files before the spec just to fill the folder. Empty
-structure is healthier than fake product truth.
+- [overview.md](/home/trung/Documents/2026/project/auto-trillion-news-post/docs/product/overview.md)
+  Product position, current baseline, target v2, surfaces, and golden flow.
+- [workbook-contracts.md](/home/trung/Documents/2026/project/auto-trillion-news-post/docs/product/workbook-contracts.md)
+  Dual workbook contracts, parsing rules, and `Link Post` behavior.
+- [release-boundaries.md](/home/trung/Documents/2026/project/auto-trillion-news-post/docs/product/release-boundaries.md)
+  Brownfield rollout slices from stabilization through UI/scheduling.
 
-## Update Rule
+Update rule:
 
-When behavior changes:
-
-1. Update the affected product doc.
-2. Update or create the story packet.
-3. Update durable proof status with `scripts/bin/harness-cli story add` or
-   `scripts/bin/harness-cli story update`.
-4. Record a decision if the change affects architecture, scope, risk, or a
-   previously settled product rule.
+1. Update the affected product doc when behavior or scope changes.
+2. Update story packets or backlog slices that depend on that behavior.
+3. Update `docs/TEST_MATRIX.md` and durable story proof when validation shape
+   changes.
+4. Add or refresh a decision when architecture, source-of-truth hierarchy,
+   runtime/storage direction, or validation requirements change.

@@ -6,6 +6,11 @@ stories, or implementation work.
 
 The human does not need to classify risk. The harness does.
 
+For this repository, the approved seed spec already exists and the project is a
+brownfield local automation tool. Most new requests should therefore enter as a
+`Spec slice`, `Change request`, `Maintenance request`, or `Harness
+improvement`, not as a brand-new spec.
+
 ## Intake Flow
 
 ```text
@@ -43,6 +48,23 @@ lane.
 
 Do not create or extend a monolithic spec by default after intake. Use product
 docs, stories, decisions, and initiative notes as the living surface.
+
+## Brownfield Intake Hints
+
+Use these defaults unless the request clearly pushes in another direction:
+
+- `Spec slice`
+  Implementing or documenting one accepted part of Pipeline A, Pipeline B,
+  workbook behavior, platform support, or release boundary from `SPEC.md`.
+- `Change request`
+  Refining already accepted baseline behavior such as current CLI flows,
+  workbook naming, validation rules, or logging behavior.
+- `Maintenance request`
+  Stabilizing selectors, sessions, dependency setup, runtime config, file
+  layout, or other technical behavior without changing product scope.
+- `Harness improvement`
+  Updating product docs, decisions, feature intake, test matrix, or other
+  agent-operating materials so the repo matches current truth.
 
 ## Lanes
 
@@ -134,6 +156,36 @@ Hard gates:
 - Audit/security.
 - External provider behavior.
 - Removing or weakening validation requirements.
+
+Project-specific hard gates:
+
+- changing either workbook contract
+- changing `Link Post` parsing or write-back behavior
+- changing selective posting or retry rules
+- introducing or removing a supported platform
+- changing local runtime/storage assumptions such as replacing Excel as the
+  operator source of truth
+
+## Project Examples
+
+Typical `tiny` work:
+
+- rename workbook references in docs
+- clarify one logging field description
+- adjust one non-behavioral copy section
+
+Typical `normal` work:
+
+- add a product doc derived from an accepted spec section
+- refine Pipeline A generation rules without changing platform scope
+- add backup behavior details or dry-run visibility docs
+
+Typical `high-risk` work:
+
+- change workbook source-of-truth hierarchy
+- modify `Link Post` semantics
+- introduce Web UI as an operator surface with new behavior claims
+- add or remove platform support in the accepted MVP matrix
 
 ## Output
 

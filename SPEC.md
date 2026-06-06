@@ -1,1360 +1,863 @@
-# SPEC.md — Trillion News Auto Post System v2
+# SPEC.md — Trillion News Auto Post System
 
 ## 1. Document Control
 
 | Field | Value |
 |---|---|
 | Product name | Trillion News Auto Post System |
-| Document type | Software Specification |
-| Version | 2.0.0 |
-| Status | Brownfield — refactor from v1 CLI to multi-platform auto-posting with Web UI |
-| Language | Vietnamese UI, English generated posts |
-| Primary user | Content Admin / Marketing team (non-tech users) |
-| Main goal | Đọc dữ liệu từ file Google Sheet (Excel), tự động đăng bài lên 8 nền tảng mạng xã hội, lấy link bài đăng lưu lại vào cột "Link Post" |
+| Document type | Seed product specification for brownfield realignment |
+| Version | 2.0 |
+| Status | Approved for decomposition |
+| Primary user | Content Admin / Marketing Operator |
+| Runtime model | Local tool, operator-driven |
+| Primary language | Vietnamese for operations, English for generated social drafts |
 
----
+## 2. Purpose of This Spec
 
-## 2. Background
+Tài liệu này tồn tại để chốt lại product contract cho repo brownfield hiện tại.
 
-### 2.1 Quy trình hiện tại (v1)
+Mục tiêu của bản final này là:
 
-Hệ thống v1 là CLI tool thực hiện:
+- Phân biệt rõ đâu là năng lực đã có trong repo và đâu là target v2.
+- Loại bỏ các mô tả bị lặp, mâu thuẫn, hoặc nói trước implementation.
+- Chốt data contract đủ rõ để tiếp tục tách `docs/product/*`, `docs/stories/*`, validation, và implementation.
 
-1. Tìm tin tức bằng keyword → lọc `trillion` → lưu Excel → screenshot → tạo bài AI → hỗ trợ đăng LinkedIn thủ công.
+Theo Harness của repo, đây là seed specification. Sau khi tách xong thành product docs và story packets, các thay đổi tiếp theo không nên tiếp tục dồn ngược vào một spec lớn khác.
 
-### 2.2 Quy trình mới (v2)
+## 3. Brownfield Snapshot
 
-Input đã sẵn sàng trong file Google Sheet `Trillion $ news(1).xlsx`.
+### 3.1 Implemented Baseline in Repo
 
-File Excel này đã có:
+Repo hiện đã có các năng lực đã được thể hiện trong code và test:
 
-- Tiêu đề tin tức (`Trillion $ news Title`).
-- Link ảnh Google Drive (`Image link`).
-- Nội dung bài đăng đã viết sẵn cho từng nền tảng: `Linkedin`, `Facebook`, `X (Twitter)`, `Instagram`, `Pinterest`, `Threads`, `TikTok`, `YouTube`.
-- Cột `Link Post` để lưu link bài đăng sau khi post.
+- CLI `init`, `search`, `generate`, `run`, `post`.
+- Tìm tin tức bằng Playwright từ search engine.
+- Lọc tin liên quan đến chủ đề `trillion`.
+- Loại bỏ trùng lặp theo URL/title đã chuẩn hóa.
+- Chụp screenshot local cho bài giữ lại.
+- Gọi Gemini để tạo social draft.
+- Ghi dữ liệu vào workbook nội bộ 14 cột.
+- Assisted posting cho LinkedIn theo luồng có người vận hành xác nhận.
+- Test cho `excel_store`, `filter`, validation, và assisted posting mock.
 
-**Hệ thống v2 chỉ cần:**
+### 3.2 Not Yet Implemented but Previously Described as Ready
 
-1. Đọc file Excel.
-2. Tải ảnh từ Google Drive link.
-3. Đăng nhập lần lượt 8 nền tảng mạng xã hội.
-4. Đăng bài với nội dung + ảnh tương ứng từng nền tảng.
-5. Mỗi nền tảng đăng 2 bài mỗi lần chạy (configurable).
-6. Lấy link bài đăng → ghi lại vào cột `Link Post`.
-7. Cung cấp giao diện web để người dùng không phải tech có thể chạy tool.
-8. Hỗ trợ hẹn giờ đăng bài.
+Các hạng mục sau chưa được xem là implemented ở thời điểm chốt spec này:
 
----
+- Đọc workbook business nhiều sheet theo schema `Trillion $ news.xlsx`.
+- Tự động đăng thống nhất lên đủ 8 nền tảng từ một row business workbook.
+- Cơ chế selective posting dựa trên `Link Post`.
+- Lớp poster chung cho nhiều nền tảng với write-back kết quả riêng từng platform.
+- Web UI FastAPI/Jinja2/HTMX.
+- Scheduling local bền vững cho posting jobs.
+- Dashboard lịch sử, thông báo, và vận hành đa luồng hoàn chỉnh.
 
-## 3. Product Goal
+### 3.3 Problems Found in the Previous SPEC
 
-Xây dựng hệ thống auto-posting local:
+Các vấn đề chính đã được sửa trong bản final:
 
-- **Input**: File Excel (Google Sheet export) đã có sẵn nội dung bài viết cho 8 nền tảng.
-- **Processing**: Đăng nhập từng nền tảng → đăng bài + ảnh → thu thập link post.
-- **Output**: Cột `Link Post` trong Excel được cập nhật link bài đăng thực tế.
-- **UI**: Web dashboard để người dùng non-tech thao tác.
-- **Scheduling**: Hẹn giờ đăng bài tự động.
+- File chứa conflict marker và hai phiên bản spec chồng lên nhau.
+- Trộn lẫn current state với target state làm người đọc dễ hiểu nhầm repo đã có đủ v2.
+- Đi quá sâu vào implementation detail theo platform thay vì chốt product contract.
+- Không làm rõ sự khác nhau giữa workbook nội bộ hiện có và workbook business target.
+- Cố định các giá trị nên để ở config, ví dụ giới hạn số bài mỗi lần chạy.
 
----
+## 4. Product Vision
 
-## 4. Non-Goals
+Xây dựng một local operations tool giúp team nội dung chạy đúng luồng nghiệp vụ mà khách hàng yêu cầu:
 
-Hệ thống v2 không làm:
+1. Nhập từ khóa.
+2. Tìm kiếm và lọc tin tức bằng Playwright scraper.
+3. Chụp ảnh màn hình tin tức và lưu local.
+4. Dùng Gemini sinh 8 nội dung bài đăng cho 8 nền tảng.
+5. Ghi tiêu đề, ảnh local, và 8 bài nháp vào workbook vận hành `Trillion $ news.xlsx`.
+6. Cho phép người dùng mở Excel để xem trước hoặc chỉnh sửa nếu muốn.
+7. Đọc lại workbook để tự động đăng lên 8 nền tảng bằng session đã lưu.
+8. Lấy link bài đăng thực tế và ghi ngược lại vào cột `Link Post`.
 
-- Không tìm kiếm tin tức mới (input đã có sẵn trong Excel).
-- Không tạo nội dung AI (bài viết đã có sẵn trong Excel).
-- Không crawl web.
-- Không bypass captcha phức tạp (dùng persistent browser session).
-- Không quản lý nhiều tài khoản cùng lúc cho 1 nền tảng.
-- Không cần mobile app.
+Đây không phải là sản phẩm SaaS đa tenant. Đây là công cụ nội bộ chạy local, ưu tiên ổn định vận hành hơn là độ phức tạp hệ thống.
 
----
+## 5. Users and Operating Model
 
-## 5. Scope
+### 5.1 Primary User
 
-### 5.1 Core Scope (MVP)
+Người dùng chính là Content Admin / Marketing Operator:
 
-1. Đọc file Excel input (`Trillion $ news(1).xlsx`).
-2. Tải ảnh từ Google Drive link.
-3. Đăng bài tự động lên 8 nền tảng: LinkedIn, Facebook, X (Twitter), Instagram, Pinterest, Threads, TikTok, YouTube.
-4. Mỗi nền tảng đăng 2 bài/lần chạy (configurable).
-5. Thu thập link bài đăng → ghi vào cột `Link Post`.
-6. CLI interface để chạy.
+- Biết thao tác file Excel và trình duyệt.
+- Không cần biết lập trình.
+- Có thể đăng nhập thủ công vào các nền tảng khi hệ thống yêu cầu.
 
-### 5.2 Enhanced Scope (v2+)
+### 5.2 Operating Model
 
-1. Web UI dashboard cho người dùng non-tech.
-2. Hẹn giờ đăng bài (scheduling).
-3. Xem trước bài viết trước khi đăng.
-4. Dashboard thống kê trạng thái đăng bài.
-5. Notification khi đăng xong hoặc lỗi.
+Hệ thống chạy trên máy local của team:
 
----
+- Dùng browser thật.
+- Lưu session local theo từng nền tảng.
+- Lưu workbook, ảnh, draft, và logs trên filesystem local.
+- Chấp nhận có bước human-in-the-loop khi login, captcha, hoặc nền tảng thay đổi UI.
 
-## 6. Input Data — Excel Schema
+## 6. Scope
 
-### 6.1 File
+### 6.1 In Scope
 
-```
-Trillion $ news(1).xlsx
-```
+- Giữ ổn định pipeline baseline hiện có.
+- Chuẩn hóa rõ hai pipeline: Harvesting/Draft Generation và Business Posting.
+- Dùng `Trillion $ news.xlsx` làm workbook vận hành chính của v2.
+- Hỗ trợ target 8 nền tảng: LinkedIn, Facebook, X, Instagram, Pinterest, Threads, TikTok, YouTube.
+- Session login persistent theo từng nền tảng.
+- Xử lý ảnh từ local path hoặc Google Drive sharing URL.
+- Sinh đủ 8 draft social cho mỗi bài được giữ lại trong flow v2.
+- Ghi kết quả đăng bài vào `Link Post`.
+- Có CLI tiếp tục dùng được.
+- Có Web UI cơ bản ở giai đoạn sau.
+- Có scheduling local ở giai đoạn sau.
 
-### 6.2 Sheets
+### 6.2 Out of Scope
 
-File có nhiều sheet, mỗi sheet là một chủ đề (category):
+- Mobile app.
+- Quản lý nhiều account đồng thời cho cùng một nền tảng trong một lần chạy.
+- Bypass captcha hoặc xác minh bảo mật phức tạp.
+- Hệ thống cloud multi-user với phân quyền phức tạp.
+- Đồng bộ trực tiếp với Google Sheets API trong MVP.
+- Video editing hoặc media pipeline phức tạp.
 
-| Sheet | Description |
-|---|---|
-| Payment | Tin tức về Payment, Fintech, Cross-border |
-| Charity & Tokenization | Tin tức về Charity, Tokenization |
-| *(thêm sheet mới theo nhu cầu)* | |
+### 6.3 Brownfield Guardrails
 
-### 6.3 Columns (mỗi sheet đều giống nhau)
+Refactor v2 phải giữ các nguyên tắc sau:
 
-| Col | Header | Type | Description |
-|---:|---|---|---|
-| 1 | `#` | Number | ID tự tăng |
-| 2 | `Trillion $ news Title` | String | Tiêu đề tin tức |
-| 3 | `Image link` | URL | Link ảnh trên Google Drive |
-| 4 | `Linkedin` | String | Nội dung bài đăng LinkedIn |
-| 5 | `Facebook` | String | Nội dung bài đăng Facebook |
-| 6 | `X (Twitter)` | String | Nội dung bài đăng X/Twitter |
-| 7 | `Instagram` | String | Nội dung bài đăng Instagram |
-| 8 | `Pinterest` | String | Nội dung bài đăng Pinterest |
-| 9 | `Threads` | String | Nội dung bài đăng Threads |
-| 10 | `TikTok` | String | Nội dung bài đăng TikTok |
-| 11 | `YouTube` | String | Nội dung bài đăng YouTube |
-| 12 | `Link Post` | String | Link bài đăng sau khi post (output) |
+- Không làm vỡ CLI baseline hiện có nếu chưa có quyết định chấp thuận rõ ràng.
+- Không xóa pipeline harvest + generate hiện có.
+- Không bắt người dùng phải chuyển ngay sang UI mới.
+- Không buộc người dùng tự sửa tay workbook để thích nghi với thay đổi schema nếu việc đó có thể xử lý bằng mapping trong hệ thống.
 
+## 7. Product Model
 
-> [!NOTE]
-> **Lưu ý về dữ liệu thực tế trong file Excel:**
-> - Một số tiêu đề cột có khoảng trắng thừa, ví dụ: `'TikTok '` có khoảng trắng phía sau, `' X (Twitter)'` có khoảng trắng phía trước. Hệ thống cần strip (loại bỏ) khoảng trắng hai đầu của tất cả tên cột khi ánh xạ (mapping).
-> - Một số sheet (như sheet `Charity & Tokenization`) ban đầu có thể không có cột `Link Post`. Hệ thống phải tự động phát hiện và thêm cột `Link Post` vào cuối sheet khi ghi kết quả bài đăng.
+### 7.1 Pipeline A — Harvesting and Draft Generation
 
-### 6.4 Platform Content Format
+Input:
 
-Mỗi cell nội dung nền tảng chứa bài viết hoàn chỉnh, bao gồm:
+- `keywords.txt` hoặc danh sách keyword do người vận hành cung cấp.
 
-```text
-#Hashtag1 #Hashtag2 #Hashtag3 #Hashtag4 #Hashtag5
+Output:
 
-[Nội dung bài viết]
+- News items đã lọc.
+- Screenshot local.
+- 8 social drafts cho 8 nền tảng target.
+- Dữ liệu được ghi vào workbook vận hành chính `Trillion $ news.xlsx` theo contract business workbook của v2.
 
-#TAHKFoundation #HenryUniverses #USIran #USTariffs #Trump
-```
+### 7.2 Pipeline B — Business Workbook Posting
 
-### 6.5 Link Post Column — Output Format
+Input:
 
-Cột `Link Post` (Col 12) sẽ chứa tất cả link bài đăng từ các nền tảng, phân cách bằng newline:
+- Workbook business nhiều sheet, mỗi row là một nội dung có thể đăng đa nền tảng.
+- Ảnh local path hoặc Google Drive sharing URL.
 
-```text
-LinkedIn: https://www.linkedin.com/feed/update/urn:li:activity:...
-Facebook: https://www.facebook.com/...
-X: https://x.com/user/status/...
-Instagram: https://www.instagram.com/p/...
-Pinterest: https://www.pinterest.com/pin/...
-Threads: https://www.threads.net/...
-TikTok: https://www.tiktok.com/@user/video/...
-YouTube: https://www.youtube.com/post/...
-```
+Output:
 
-Nếu nền tảng nào chưa đăng hoặc lỗi, dòng đó sẽ ghi:
+- Kết quả đăng bài cho từng nền tảng.
+- Permalink nếu lấy được.
+- Trạng thái lỗi hoặc skip nếu không đăng được.
+- `Link Post` được cập nhật tại đúng row.
 
-```text
-LinkedIn: [pending]
-Facebook: [error] Timeout khi đăng bài
-```
+### 7.3 End-to-End Golden Flow
 
----
-
-## 7. Supported Platforms
-
-### 7.1 Platform Matrix
-
-| # | Platform | Posting Method | Image Support | Link Capture |
-|---:|---|---|---|---|
-| 1 | LinkedIn | Playwright browser automation | ✅ Upload image | ✅ From URL after post |
-| 2 | Facebook | Playwright browser automation | ✅ Upload image | ✅ From URL after post |
-| 3 | X (Twitter) | Playwright browser automation | ✅ Upload image | ✅ From URL after post |
-| 4 | Instagram | Playwright browser automation | ✅ Upload image (required) | ✅ From URL after post |
-| 5 | Pinterest | Playwright browser automation | ✅ Upload image (required) | ✅ From URL after post |
-| 6 | Threads | Playwright browser automation | ✅ Upload image | ✅ From URL after post |
-| 7 | TikTok | Playwright browser automation | ✅ Upload image/video | ⚠️ Best-effort |
-| 8 | YouTube | Playwright browser automation | ✅ Community post | ⚠️ Best-effort |
-
-### 7.2 Posting Strategy
-
-- Dùng **Playwright persistent browser context** để giữ session login.
-- Người dùng login thủ công lần đầu qua giao diện browser → session được lưu.
-- Các lần chạy sau không cần login lại (trừ khi session hết hạn).
-- Mỗi nền tảng có module riêng để xử lý logic đăng bài.
-
----
-
-## 8. Tech Stack
-
-| Layer | Technology | Reason |
-|---|---|---|
-| Runtime | Python 3.11+ | Đã có từ v1, ecosystem Playwright tốt |
-| Browser automation | Playwright | Đăng bài, chụp link, persistent session |
-| Excel I/O | openpyxl | Đọc/ghi file `.xlsx` |
-| Image download | requests / httpx | Tải ảnh từ Google Drive link |
-| Web UI | FastAPI + Jinja2 + HTMX | Server-side rendering, realtime updates, đơn giản |
-| Scheduling | APScheduler | Hẹn giờ đăng bài |
-| Config | `.env` + `config.yaml` | Dễ cấu hình |
-| Storage | Local folder + SQLite (optional) | Session, logs, job queue |
-| Logging | Python logging | Structured logs |
-
----
-
-## 9. System Architecture
-
-### 9.1 High-Level Workflow
+Luồng chuẩn mà v2 phải phục vụ là:
 
 ```text
-Excel File (Input)
+[Từ khóa / Keywords]
        │
        ▼
-┌──────────────────┐
-│  Excel Reader    │  → Đọc sheet, đọc row, lấy content từng platform
-└──────┬───────────┘
+Pipeline A
+1. Tìm kiếm tin tức bằng Playwright scraper
+2. Lọc tin tức theo từ khóa/thesis đã nhập
+3. Chụp ảnh màn hình tin tức và lưu local
+4. Gemini sinh 8 nội dung bài đăng cho 8 nền tảng
+5. Ghi title, ảnh local, draft của 8 nền tảng vào Trillion $ news.xlsx
+       │
+       ├─► Người dùng có thể mở Excel để xem trước hoặc chỉnh sửa
        │
        ▼
-┌──────────────────┐
-│  Image Downloader│  → Tải ảnh từ Google Drive link → lưu local
-└──────┬───────────┘
-       │
-       ▼
-┌──────────────────────────────────────────────────────┐
-│              Platform Poster (8 modules)             │
-│                                                      │
-│  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌────────────┐ │
-│  │LinkedIn │ │Facebook │ │X/Twitter│ │ Instagram  │ │
-│  └─────────┘ └─────────┘ └─────────┘ └────────────┘ │
-│  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌────────────┐ │
-│  │Pinterest│ │ Threads │ │ TikTok  │ │  YouTube   │ │
-│  └─────────┘ └─────────┘ └─────────┘ └────────────┘ │
-└──────────────────────┬───────────────────────────────┘
-                       │
-                       ▼
-              ┌─────────────────┐
-              │  Link Collector │  → Thu thập URL bài đăng
-              └────────┬────────┘
-                       │
-                       ▼
-              ┌─────────────────┐
-              │  Excel Writer   │  → Ghi link vào cột "Link Post"
-              └─────────────────┘
+Pipeline B
+6. Đọc draft từ Trillion $ news.xlsx và bỏ qua các platform đã có Link Post thành công
+7. Đăng bài lên 8 nền tảng qua Playwright bằng session lưu sẵn
+8. Capture link bài đăng thực tế và ghi ngược lại vào cột Link Post
 ```
 
-### 9.2 Web UI Architecture
+### 7.4 Control Surfaces
+
+- CLI là surface bắt buộc phải duy trì.
+- Web UI là surface bổ sung cho vận hành non-tech.
+
+### 7.5 Operator Review Gate
+
+Giữa Pipeline A và Pipeline B phải có một review gate hợp lệ:
+
+- Người dùng được phép mở `Trillion $ news.xlsx` để xem trước.
+- Người dùng được phép sửa nội dung draft từng nền tảng trước khi post.
+- Hệ thống phải xem nội dung trong Excel là dữ liệu cuối cùng để dùng cho posting.
+
+### 7.6 Automation Layer
+
+- Scheduling là lớp bổ sung sau posting core.
+- Dashboard/lịch sử là lớp bổ sung sau khi đã có job model ổn định.
+
+## 8. Source of Truth and Data Contracts
+
+Đây là phần quan trọng nhất của bản final vì đây là nơi spec cũ mơ hồ nhất.
+
+### 8.1 Contract A — Internal Harvest Workbook
+
+Workbook nội bộ hiện có trong code là contract baseline cần được giữ tương thích. Schema hiện tại gồm 14 cột:
+
+1. `ID`
+2. `Found Date`
+3. `Keyword`
+4. `Title`
+5. `Source`
+6. `URL`
+7. `Snippet`
+8. `Published Text`
+9. `Image File`
+10. `Platform`
+11. `Top Hashtags`
+12. `Generated Post File`
+13. `Status`
+14. `Notes`
+
+Workbook này phục vụ compatibility với baseline hiện có, không phải workbook vận hành chính mà khách hàng yêu cầu cho v2.
+
+### 8.2 Contract B — Business Posting Workbook
+
+Workbook business target, đồng thời là workbook vận hành chính của v2 cho cả Pipeline A và Pipeline B, là file `.xlsx` nhiều sheet:
 
 ```text
-┌─────────────────────────────────────────────┐
-│                  Browser                     │
-│  ┌─────────────────────────────────────────┐ │
-│  │          Web Dashboard (HTMX)           │ │
-│  │                                         │ │
-│  │  ┌─────────┐ ┌──────────┐ ┌──────────┐ │ │
-│  │  │Upload   │ │Preview   │ │Schedule  │ │ │
-│  │  │Excel    │ │& Select  │ │& Post    │ │ │
-│  │  └─────────┘ └──────────┘ └──────────┘ │ │
-│  │  ┌─────────────────────────────────────┐ │ │
-│  │  │       Status Dashboard              │ │ │
-│  │  │  ✅ LinkedIn  ✅ Facebook  ⏳ X    │ │ │
-│  │  │  ❌ Instagram  ⏳ Pinterest ...    │ │ │
-│  │  └─────────────────────────────────────┘ │ │
-│  └─────────────────────────────────────────┘ │
-└──────────────────┬──────────────────────────┘
-                   │ HTTP / WebSocket
-                   ▼
-          ┌─────────────────┐
-          │  FastAPI Server  │
-          │  + APScheduler   │
-          └─────────────────┘
+Trillion $ news.xlsx
 ```
 
----
+Mỗi sheet là một category/chủ đề. Mỗi row là một bài có thể đăng lên nhiều nền tảng. Đây là nơi Pipeline A ghi draft và Pipeline B đọc lại để post.
+
+Schema target:
+
+| Col | Header | Meaning |
+|---:|---|---|
+| 1 | `#` | Row ID trong sheet |
+| 2 | `Trillion $ news Title` | Tiêu đề tin tức |
+| 3 | `Image link` | Google Drive URL hoặc local image path |
+| 4 | `Linkedin` | Draft cho LinkedIn |
+| 5 | `Facebook` | Draft cho Facebook |
+| 6 | `X (Twitter)` | Draft cho X |
+| 7 | `Instagram` | Draft cho Instagram |
+| 8 | `Pinterest` | Draft cho Pinterest |
+| 9 | `Threads` | Draft cho Threads |
+| 10 | `TikTok` | Draft cho TikTok |
+| 11 | `YouTube` | Draft cho YouTube |
+| 12 | `Link Post` | Kết quả đăng bài theo từng nền tảng |
+
+### 8.3 Brownfield Decision on the Two Contracts
+
+v2 phải hỗ trợ đồng thời hai contract:
+
+- Internal workbook cho compatibility của baseline hiện có.
+- Business workbook `Trillion $ news.xlsx` làm source of truth vận hành chính cho customer flow.
+
+Không được giả định rằng người dùng phải tự quản lý hai workbook riêng để chạy flow chính. Nếu cần mapping hoặc conversion từ legacy flow sang workbook business, đó là trách nhiệm của implementation, không phải của người dùng vận hành.
+
+### 8.4 Header Normalization Rule
+
+Khi đọc business workbook:
+
+- Tất cả header phải được `strip()` khoảng trắng đầu/cuối.
+- Mapping header không được fail chỉ vì sai khác whitespace.
+- `TikTok ` và `TikTok` là một.
+- ` X (Twitter)` và `X (Twitter)` là một.
+
+### 8.5 Missing Column Rule
+
+Nếu một sheet thiếu cột `Link Post`:
+
+- Sheet vẫn được xem là hợp lệ để đọc.
+- Mặc định mọi platform trên row đó được xem là chưa có kết quả đăng.
+- Hệ thống phải tự tạo cột `Link Post` khi cần ghi kết quả.
+
+### 8.6 Content Cell Rule
+
+Một ô draft được xem là không có nội dung khi:
+
+- Rỗng.
+- Chỉ có whitespace.
+- Chỉ chứa dấu `.`
+
+Platform tương ứng phải được skip, không bị xem là lỗi hệ thống.
+
+### 8.7 `Link Post` Format
+
+`Link Post` là một text block, mỗi dòng ứng với một nền tảng:
+
+```text
+LinkedIn: https://...
+Facebook: https://...
+X: [posted-no-link]
+Instagram: [error] upload failed
+Pinterest: [skip] no content
+Threads: [login-required]
+```
+
+Các trạng thái hợp lệ:
+
+- URL thành công.
+- `[pending]`
+- `[skip] <reason>`
+- `[error] <reason>`
+- `[login-required]`
+- `[posted-no-link]`
+
+### 8.8 Selective Posting Rule
+
+Hệ thống không được đăng trùng trên cùng row cho cùng platform.
+
+Cho mỗi `row x platform`:
+
+- Nếu `Link Post` đã có URL thành công hoặc `[posted-no-link]` thì phải bỏ qua.
+- Nếu đang là `[pending]`, `[error]`, `[login-required]`, hoặc chưa có dòng nào cho platform đó thì được phép thử lại.
+- Nếu không có draft content thì phải skip platform đó.
+
+### 8.9 Posting Limits Rule
+
+Theo yêu cầu khách hàng cho MVP vận hành:
+
+- Mỗi nền tảng đăng `2 bài` trong mỗi lần chạy posting mặc định.
+- Hệ thống phải ưu tiên chọn 2 row hợp lệ tiếp theo cho từng platform, sau khi đã áp dụng selective posting rule.
+- Ở lớp nâng cao, giới hạn này nên có thể cấu hình qua CLI config hoặc UI/scheduler, nhưng mặc định nghiệp vụ ban đầu là `2`.
+
+### 8.10 `Link Post` Customer Constraint and Parser Rule
+
+Customer workbook hiện bị ràng buộc chỉ có một cột `Link Post` chung.
+
+Quyết định chốt cho MVP:
+
+- Giữ một cột `Link Post` để tương thích workbook customer hiện tại.
+- Hệ thống phải có parser và writer an toàn cho từng dòng `Platform: value`.
+- Khi ghi kết quả cho một platform, hệ thống không được làm hỏng hoặc xóa trạng thái của các platform khác.
+- Nếu người dùng sửa tay sai format, hệ thống phải báo lỗi parse rõ ràng thay vì silently overwrite.
+
+### 8.11 Google Drive Accessibility Rule
+
+Với `Image link` là Google Drive URL, hệ thống chỉ được xem là tải thành công khi có thể truy cập trực tiếp mà không cần login Google bổ sung trong luồng tải ảnh.
+
+Các rule bắt buộc:
+
+- Nếu file không public hoặc không tải được, platform yêu cầu ảnh phải nhận trạng thái `[error] image inaccessible`.
+- Nếu file không tải được nhưng platform cho phép text-only, hệ thống được phép tiếp tục text-only.
+- Nếu link không trỏ tới ảnh hợp lệ hoặc định dạng file không hỗ trợ, xử lý như lỗi ảnh không hợp lệ.
+- Nếu file quá lớn hoặc tải timeout, lỗi phải được ghi rõ để operator biết nguyên nhân.
+
+### 8.12 Platform Capability Matrix for MVP
+
+| Platform | Text-only allowed | Image/video required for MVP | MVP posting mode notes |
+|---|---|---|---|
+| LinkedIn | Yes | No | Standard feed post, image optional |
+| Facebook | Yes | No | Feed post, image optional |
+| X (Twitter) | Yes | No | Standard post, image optional |
+| Instagram | No | Yes | Image-first post |
+| Pinterest | No | Yes | Pin/image-first post |
+| Threads | Yes | No | Standard thread post, image optional |
+| TikTok | No | Yes | MVP scope là photo/image post nếu account và UI hỗ trợ; video upload chưa thuộc MVP |
+| YouTube | No | Yes | MVP scope là Community Post nếu channel hỗ trợ; video upload và Shorts chưa thuộc MVP |
+
+Matrix này là contract để quyết định khi nào được phép text-only và khi nào phải trả lỗi ảnh.
+
+## 9. User Requirements
+
+### UR-01 — Keyword Intake
+
+Người vận hành muốn nhập keyword để hệ thống tự tìm tin liên quan đến chủ đề `trillion`.
+
+### UR-02 — Automatic Draft Generation
+
+Người vận hành muốn hệ thống tự sinh 8 draft social cho 8 nền tảng từ các tin đã lọc.
+
+### UR-03 — Excel Review Before Posting
+
+Người vận hành muốn xem và sửa draft trong `Trillion $ news.xlsx` trước khi hệ thống đăng bài.
+
+### UR-04 — Selective Posting
+
+Người vận hành muốn hệ thống đọc lại Excel và chỉ đăng các platform chưa có kết quả thành công.
+
+### UR-05 — Visible Per-Platform Status
+
+Người vận hành muốn biết platform nào đăng thành công, platform nào lỗi, platform nào cần login lại, và platform nào bị skip.
+
+### UR-06 — Safe Posting Limit
+
+Người vận hành muốn mỗi lần chạy chỉ đăng tối đa 2 bài mỗi platform để giảm spam và rủi ro anti-bot.
+
+### UR-07 — Non-Technical Operation
+
+Người vận hành không chuyên kỹ thuật muốn có thể chạy flow chính bằng giao diện dễ dùng thay vì chỉ dựa vào CLI.
+
+### UR-08 — Scheduled Posting
+
+Người vận hành muốn có khả năng hẹn giờ đăng bài ở giai đoạn nâng cao.
 
 ## 10. Functional Requirements
 
-### FR-001 — Read Excel Input
+### FR-01 — Baseline CLI Compatibility
 
-#### Description
+Hệ thống phải tiếp tục hỗ trợ các lệnh baseline hiện có:
 
-Hệ thống phải đọc file Excel `Trillion $ news(1).xlsx` và parse tất cả sheet.
+- `init`
+- `search`
+- `generate`
+- `run`
+- `post`
 
-#### Input
+Refactor được phép thay đổi module nội bộ, nhưng không được làm vỡ contract vận hành bên ngoài của các lệnh này nếu chưa có quyết định thay đổi rõ ràng.
 
-File Excel path (mặc định hoặc user upload qua Web UI).
+Acceptance Criteria:
 
-#### Output
+- Given repo baseline hiện tại, when refactor v2 được áp dụng, then các lệnh `init/search/generate/run/post` vẫn còn callable.
+- Given không có quyết định thay đổi CLI được chấp thuận, when release được bàn giao, then không có lệnh baseline nào bị remove âm thầm.
 
-Danh sách `PostItem` từ tất cả sheet.
+### FR-02 — Keyword-Based Harvesting
 
-#### Rules
+Pipeline A phải:
 
-- Đọc tất cả sheet trong file.
-- Mỗi row là 1 tin tức với nội dung cho 8 nền tảng.
-- Bỏ qua row không có title (Col 2 rỗng hoặc chỉ chứa khoảng trắng).
-- **Xử lý khoảng trắng trong tiêu đề cột (Headers):** Thực hiện loại bỏ khoảng trắng thừa (trim/strip) ở hai đầu của tên cột trước khi thực hiện so khớp nền tảng (ví dụ: biến `' X (Twitter)'` thành `'X (Twitter)'`, `'TikTok '` thành `'TikTok'`).
-- **Xử lý cột thiếu:** Nếu sheet nào thiếu cột `Link Post` (ví dụ: `Charity & Tokenization`), trình đọc Excel phải tự hiểu là tất cả các dòng thuộc sheet đó đều ở trạng thái chưa đăng bài (hoặc `[pending]`), và cột này sẽ được thêm tự động khi ghi dữ liệu.
-- **Xử lý nội dung rỗng/whitespace:** Cell rỗng, chỉ chứa khoảng trắng (whitespace-only, ví dụ: `' '`, `'  '`), hoặc chỉ chứa ký tự `.` → được coi là không có nội dung cho nền tảng đó → skip nền tảng đó (trạng thái `[skip]`).
-- **Kiểm soát đăng trùng (Selective Posting):** Đối với mỗi dòng, nếu cột `Link Post` đã ghi nhận link thành công của một nền tảng (ví dụ: `LinkedIn: https://...` hoặc `LinkedIn: [posted-no-link]`), hệ thống **phải bỏ qua** và không đăng lại trên nền tảng đó. Hệ thống chỉ đăng các nền tảng có trạng thái là `[pending]`, `[error]`, `[login-required]`, hoặc các nền tảng chưa có dòng trạng thái trong cột.
-- Bỏ qua row đã có `Link Post` đầy đủ tất cả các nền tảng có nội dung (đã đăng hết).
-- Ghi nhận sheet name làm `category`.
+- Đọc keyword từ file hoặc input tương đương.
+- Tìm tin bằng browser automation trên search engine đã cấu hình.
+- Tôn trọng cấu hình headless, provider, và giới hạn kết quả.
+- Dừng an toàn hoặc báo lại rõ ràng khi gặp captcha/xác minh.
 
-#### Acceptance Criteria
+Acceptance Criteria:
 
-- Đọc file có 2 sheet: `Payment` và `Charity & Tokenization`.
-- Ánh xạ chính xác các cột nền tảng bất kể có hay không khoảng trắng thừa ở tiêu đề.
-- Parse đúng nội dung từng cột platform, tự động loại bỏ khoảng trắng đầu/cuối của nội dung.
-- Xác định chính xác các nền tảng cần đăng dựa trên lịch sử trong cột `Link Post`.
-- Row có Col 2 rỗng hoặc chỉ chứa khoảng trắng không được parse.
+- Given một danh sách keyword hợp lệ, when chạy harvesting, then hệ thống thử tìm theo từng keyword thay vì chỉ keyword đầu tiên.
+- Given gặp captcha hoặc xác minh, when scraper không thể tiếp tục an toàn, then run trả về cảnh báo/lỗi rõ ràng thay vì treo im lặng.
 
----
+### FR-03 — Filtering and De-duplication
 
-### FR-002 — Download Image from Google Drive
+Pipeline A phải:
 
-#### Description
+- Lọc theo thesis `trillion`.
+- Loại bỏ bài trùng theo URL hoặc title đã normalize.
+- Hỗ trợ domain exclusion theo config.
 
-Hệ thống phải tải ảnh từ Google Drive link trong cột `Image link` (Col 3).
+Acceptance Criteria:
 
-#### Input
+- Given tập kết quả có bài trùng URL hoặc title đã normalize, when filter hoàn tất, then chỉ còn một bản ghi hợp lệ.
+- Given domain nằm trong danh sách exclude, when filter chạy, then bài từ domain đó không đi tiếp sang bước generate.
 
-Google Drive sharing URL:
+### FR-04 — Screenshot Capture
 
-```text
-https://drive.google.com/file/d/{FILE_ID}/view?usp=sharing
-```
+Pipeline A phải:
 
-#### Output
+- Chụp screenshot local cho các bài được giữ lại.
+- Đổi tên file temp thành tên ổn định khi lưu.
+- Không làm fail toàn bộ run nếu một ảnh chụp lỗi.
 
-File ảnh local trong folder `images/`.
+Acceptance Criteria:
 
-#### Image Download Logic
+- Given bài đã qua filter, when screenshot thành công, then file ảnh local tồn tại và có tên ổn định để ghi vào workbook.
+- Given một bài screenshot lỗi, when run tiếp tục, then các bài khác vẫn được xử lý tiếp.
 
-1. Parse `FILE_ID` từ URL.
-2. Convert sang direct download URL:
+### FR-05 — AI Draft Generation
 
-```text
-https://drive.google.com/uc?export=download&id={FILE_ID}
-```
+Pipeline A phải:
 
-3. Download và lưu local.
-4. Nếu link rỗng hoặc download lỗi → skip ảnh, vẫn đăng bài text-only (nếu platform cho phép).
+- Gọi Gemini để tạo draft tiếng Anh cho đủ 8 nền tảng target.
+- Validate tối thiểu trước khi chấp nhận kết quả.
+- Ghi title, ảnh local, và draft của 8 nền tảng vào `Trillion $ news.xlsx`.
 
-#### File Naming
+Draft hợp lệ tối thiểu:
 
-```text
-images/{sheet}_{row_id}_{slug_title}.{ext}
-```
+- Không chứa placeholder chưa thay thế.
+- Có cấu trúc phù hợp với rule đang áp dụng cho platform.
 
-Example:
+Acceptance Criteria:
 
-```text
-images/payment_001_merchant_payments.png
-```
+- Given một news item hợp lệ, when generate hoàn tất, then workbook nhận đủ 8 ô draft cho 8 nền tảng target hoặc trạng thái lỗi rõ ràng cho bài đó.
+- Given draft chứa placeholder hoặc sai format tối thiểu, when validate chạy, then draft đó không được xem là thành công.
 
-#### Rules
+### FR-06 — Business Workbook Ingestion
 
-- Tạo folder `images/` nếu chưa có.
-- Không download lại nếu file đã tồn tại.
-- Timeout download: 30 giây.
-- Hỗ trợ format: `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`.
+Pipeline B phải:
 
-#### Acceptance Criteria
+- Đọc tất cả sheet hợp lệ trong workbook business.
+- Giữ lại `sheet name` như category vận hành.
+- Bỏ qua row không có title hợp lệ.
+- Trim header và trim content.
+- Xác định platform cần đăng dựa trên draft content và `Link Post`.
+- Xem nội dung đang có trong Excel là nội dung cuối cùng để post, kể cả khi người dùng đã sửa tay sau bước generate.
 
-- Link Google Drive hợp lệ → ảnh được tải về.
-- Link rỗng → skip, ghi log warning.
-- Link lỗi → skip, ghi log error, tiếp tục flow.
+Acceptance Criteria:
 
----
+- Given workbook có nhiều sheet hợp lệ, when ingest chạy, then hệ thống đọc được tất cả row có title hợp lệ.
+- Given header có whitespace thừa, when parse workbook, then mapping header vẫn thành công.
+- Given row có content là `.`, when xác định platform cần đăng, then platform đó bị skip.
+- Given operator sửa draft trong Excel sau bước generate, when posting bắt đầu, then hệ thống dùng bản draft đã sửa trong Excel.
 
-### FR-003 — Platform Login Management
+### FR-07 — Image Resolution
 
-#### Description
+Pipeline B phải hỗ trợ hai nguồn ảnh:
 
-Hệ thống phải quản lý session login cho 8 nền tảng.
+1. Local image path.
+2. Google Drive sharing URL.
 
-#### Login Strategy
+Nếu là Google Drive URL, hệ thống phải:
 
-1. Sử dụng **Playwright persistent browser context** riêng cho từng nền tảng.
-2. Lần đầu: mở browser visible → người dùng login thủ công → session lưu lại.
-3. Lần sau: browser tái sử dụng session (cookies/localStorage).
-4. Nếu session hết hạn → thông báo người dùng login lại.
-
-#### Browser Context Paths
-
-```text
-.browser_sessions/
-├── linkedin/
-├── facebook/
-├── twitter/
-├── instagram/
-├── pinterest/
-├── threads/
-├── tiktok/
-└── youtube/
-```
-
-#### Login Check Flow
-
-```text
-1. Open platform URL
-2. Check login status (presence of profile element / feed content)
-3. If logged in → proceed to post
-4. If not logged in → open visible browser → wait for manual login → save session
-5. If login timeout (180s) → mark platform as "login_required" → skip
-```
-
-#### Acceptance Criteria
-
-- Mỗi nền tảng có session folder riêng.
-- Login thành công → session persist cho lần chạy sau.
-- Login timeout → skip platform với trạng thái rõ ràng.
-
----
-
-### FR-004 — Post to Platform
-
-#### Description
-
-Hệ thống phải đăng bài lên từng nền tảng với nội dung và ảnh tương ứng.
-
-#### Input
-
-- Post content (string) từ cột tương ứng trong Excel.
-- Image file path (local).
-- Platform name.
-
-#### Posting Flow per Platform
-
-```text
-1. Check content: cell rỗng hoặc "." → skip platform
-2. Open platform in browser
-3. Verify login
-4. Navigate to post/create page
-5. Paste content
-6. Upload image (if available)
-7. Click Post/Submit
-8. Wait for confirmation / URL change
-9. Capture post URL
-10. Return post URL
-```
-
-#### Platform-Specific Logic
-
-Mỗi nền tảng cần module riêng vì UI khác nhau:
-
-##### LinkedIn
-
-```text
-- URL: https://www.linkedin.com/feed/
-- Trigger: Click "Start a post" button
-- Editor: div.ql-editor[role='textbox']
-- Image: Media button → file chooser
-- Post button: button with "Post" text
-- Link capture: URL after redirect or from feed
-```
-
-##### Facebook
-
-```text
-- URL: https://www.facebook.com/
-- Trigger: "What's on your mind?" textbox
-- Editor: contenteditable div in composer
-- Image: Photo/Video button → file chooser
-- Post button: "Post" button
-- Link capture: URL of posted content
-```
-
-##### X (Twitter)
-
-```text
-- URL: https://x.com/compose/post or https://x.com/home
-- Trigger: "What is happening?!" textbox
-- Editor: contenteditable div in composer
-- Image: Media button → file input
-- Post button: "Post" button
-- Link capture: URL pattern /status/{id}
-- Limit: 280 characters (posts may need truncation)
-```
-
-##### Instagram
-
-```text
-- URL: https://www.instagram.com/
-- Trigger: Create (+) button → Post
-- Image: Required — select from file
-- Caption: Textarea after image selection
-- Post button: "Share" button
-- Link capture: URL of post after share
-```
+- Tách được `file_id`.
+- Chuyển được sang direct download URL.
+- Tải/caching ảnh local trước khi đăng.
 
-##### Pinterest
+Nếu không tải được ảnh:
 
-```text
-- URL: https://www.pinterest.com/pin-creation-tool/
-- Trigger: Direct creation tool
-- Image: Required — upload
-- Title: Pin title input
-- Description: Description textarea
-- Post button: "Publish" button
-- Link capture: URL of new pin
-```
-
-##### Threads
-
-```text
-- URL: https://www.threads.net/
-- Trigger: Create button
-- Editor: Text input area
-- Image: Optional attachment
-- Post button: "Post" button
-- Link capture: URL of new thread
-```
-
-##### TikTok
-
-```text
-- URL: https://www.tiktok.com/upload (hoặc Creator Center)
-- Method: Upload image/slideshow as post
-- Caption: Description input
-- Post button: "Post" button
-- Link capture: Best-effort from redirect
-```
-
-##### YouTube
-
-```text
-- URL: https://www.youtube.com/
-- Method: Community post (nếu channel đủ điều kiện)
-- Trigger: Create → Community post
-- Editor: Text area
-- Image: Optional attachment
-- Post button: "Post" button
-- Link capture: URL of community post
-```
+- Với platform cho phép text-only: được tiếp tục text-only.
+- Với platform bắt buộc có ảnh: phải ghi lỗi rõ cho đúng platform đó.
 
-#### Rules
+Acceptance Criteria:
 
-- Không đăng nếu nội dung cell rỗng hoặc chỉ chứa `.`, space.
-- Mỗi nền tảng đăng tối đa **2 bài/lần chạy** (configurable).
-- Delay giữa các bài đăng: 10–30 giây (configurable, tránh rate limit).
-- Delay giữa các nền tảng: 5–15 giây.
-- Nếu đăng lỗi → log error → tiếp tục nền tảng tiếp theo.
-- Không retry tự động trong MVP (người dùng retry thủ công).
+- Given `Image link` là local path hợp lệ, when posting chuẩn bị media, then hệ thống dùng được file local đó.
+- Given Google Drive URL public hợp lệ, when resolve ảnh, then hệ thống tải được về local cache.
+- Given Google Drive URL không truy cập được, when platform yêu cầu ảnh, then platform đó nhận `[error] image inaccessible`.
 
-#### Acceptance Criteria
+### FR-08 — Platform Session Management
 
-- Đăng bài LinkedIn thành công → link post được capture.
-- Platform có cell rỗng → skip, không crash.
-- Platform login failed → skip, log rõ ràng.
-- Mỗi platform tối đa 2 bài/lần chạy.
+Hệ thống phải:
 
----
+- Dùng persistent session riêng cho từng nền tảng.
+- Hỗ trợ login thủ công lần đầu.
+- Tái sử dụng session ở các lần sau.
+- Báo trạng thái `login-required` khi session không còn hợp lệ.
 
-### FR-005 — Capture Post Link
+Acceptance Criteria:
 
-#### Description
+- Given operator đã login thành công trước đó, when run posting mới bắt đầu, then hệ thống thử tái sử dụng session đã lưu.
+- Given session hết hạn hoặc logout, when kiểm tra session thất bại, then platform đó nhận trạng thái `login-required`.
 
-Sau khi đăng bài thành công, hệ thống phải capture URL của bài đăng.
+### FR-09 — Multi-Platform Posting Core
 
-#### Link Capture Strategies
+Hệ thống phải có một posting core chung và module riêng cho từng nền tảng target:
 
-1. **URL change detection**: Theo dõi URL trước/sau khi post.
-2. **Feed scan**: Quay lại feed → tìm bài mới nhất → lấy permalink.
-3. **API response intercept**: Bắt network response chứa post ID (advanced).
-4. **Manual fallback**: Nếu không capture được → đánh dấu `[posted-no-link]`.
+- LinkedIn
+- Facebook
+- X
+- Instagram
+- Pinterest
+- Threads
+- TikTok
+- YouTube
 
-#### Rules
+Một platform chỉ được xem là "supported" khi đã có đủ:
 
-- Timeout capture: 15 giây sau khi click Post.
-- Nếu không lấy được link → ghi `[posted-no-link]` thay vì fail toàn bộ.
-- Link phải là permalink (direct link to post), không phải feed URL.
+- Cơ chế kiểm tra session.
+- Luồng mở composer/create-post.
+- Điền draft content.
+- Gắn ảnh nếu cần.
+- Submit bài.
+- Thử capture permalink hoặc trạng thái sau đăng.
+- Ghi write-back vào `Link Post`.
 
-#### Acceptance Criteria
+Lưu ý:
 
-- Sau khi đăng LinkedIn → capture được link dạng `https://www.linkedin.com/feed/update/...`.
-- Nếu capture timeout → ghi `[posted-no-link]`.
+- LinkedIn là baseline platform đã có assisted posting.
+- Các platform khác là target capability và có thể được triển khai theo đợt.
+- TikTok và YouTube được phép best-effort cho permalink capture.
+- Trong mỗi lần chạy posting theo contract customer MVP, mỗi platform xử lý tối đa 2 bài hợp lệ tiếp theo.
 
----
+Acceptance Criteria:
 
-### FR-006 — Write Link Post to Excel
+- Given workbook có nhiều row hợp lệ, when posting run bắt đầu, then mỗi platform chỉ lấy tối đa 2 row hợp lệ tiếp theo cho lần chạy đó.
+- Given một platform được gắn nhãn supported trong release hiện tại, when post chạy, then platform đó có đủ check session, điền content, gắn media nếu cần, submit, và write-back kết quả.
 
-#### Description
+### FR-10 — Result Write-Back
 
-Hệ thống phải ghi link bài đăng vào cột `Link Post` (Col 12) của file Excel.
+Khi posting xong, hệ thống phải:
 
-#### Output Format
+- Ghi kết quả theo đúng platform vào `Link Post`.
+- Không xóa kết quả đã có của platform khác trên cùng row.
+- Cho phép cập nhật lại đúng dòng của cùng platform khi retry.
+- Nên tạo backup workbook theo timestamp trước khi write-back, trừ khi bị tắt bằng config.
+- Có biện pháp an toàn khi workbook đang mở/locked.
 
-Mỗi cell `Link Post` chứa danh sách link, 1 dòng/nền tảng:
+Acceptance Criteria:
 
-```text
-LinkedIn: https://www.linkedin.com/feed/update/urn:li:activity:123
-Facebook: https://www.facebook.com/post/456
-X: https://x.com/user/status/789
-Instagram: [pending]
-Pinterest: [pending]
-Threads: [pending]
-TikTok: [skip] No content
-YouTube: [skip] No content
-```
+- Given một platform post thành công, when write-back chạy, then `Link Post` chứa đúng dòng của platform đó.
+- Given row đã có kết quả của platform khác, when cập nhật một platform mới, then dữ liệu cũ của platform khác vẫn được giữ nguyên.
+- Given backup mode đang bật, when bắt đầu write-back, then hệ thống tạo được một bản backup timestamped trước khi ghi workbook chính.
+- Given workbook đang bị lock, when ghi thất bại, then hệ thống trả lỗi rõ ràng thay vì ghi dở dang.
 
-#### Status Values per Platform
+### FR-11 — Failure Isolation and Retry
 
-| Status | Meaning |
-|---|---|
-| `https://...` | Đăng thành công, có link |
-| `[posted-no-link]` | Đăng thành công nhưng không capture được link |
-| `[pending]` | Chưa đăng |
-| `[skip]` | Cell nội dung rỗng, không đăng |
-| `[error] message` | Đăng lỗi, có mô tả lỗi |
-| `[login-required]` | Cần login lại |
+Hệ thống phải:
 
-#### Rules
+- Không để lỗi một platform làm fail toàn bộ run nếu không có lý do nghiêm trọng.
+- Cho phép retry có kiểm soát cho các trạng thái `error` và `login-required`.
+- Ghi lý do fail đủ rõ để người vận hành biết cần login lại, sửa draft, hay kiểm tra ảnh.
 
-- Ghi ngay sau khi hoàn thành mỗi nền tảng (không đợi xong hết).
-- Nếu Link Post đã có nội dung cũ → merge/append, không ghi đè platform đã posted.
-- Backup file Excel trước khi ghi (copy thành `*.backup.xlsx`).
-- Nếu file đang mở bởi ứng dụng khác → retry 3 lần, rồi báo lỗi.
+Acceptance Criteria:
 
-#### Acceptance Criteria
+- Given một platform thất bại trên một row, when run còn row/platform khác hợp lệ, then các phần còn lại vẫn tiếp tục.
+- Given row có trạng thái `error` hoặc `login-required`, when operator chạy lại, then row đó có thể được retry theo selective posting rule.
 
-- Sau khi đăng LinkedIn + Facebook → Link Post có 2 dòng link.
-- Link Post giữ lại kết quả cũ nếu đã có.
-- File Excel backup tồn tại.
+### FR-12 — CLI Surface for Pipeline B
 
----
+CLI tương lai cho Pipeline B phải cho phép ít nhất:
 
-### FR-007 — Web UI Dashboard
+- Chạy full flow từ keyword đến workbook business.
+- Chọn workbook business.
+- Chọn sheet hoặc phạm vi row.
+- Chọn platform hoặc tập platform.
+- Chạy selective posting.
+- Chạy dry-run để xem row/platform nào sẽ được post mà chưa submit thật.
+- Kiểm tra trạng thái session/login.
 
-#### Description
+Tên lệnh cụ thể có thể khác, nhưng contract vận hành phải bao phủ được các luồng trên.
 
-Hệ thống phải có giao diện web đơn giản để người dùng non-tech sử dụng.
+Acceptance Criteria:
 
-#### Pages
+- Given operator dùng CLI בלבד, when cần chạy flow chính, then CLI bao phủ được từ keyword đến workbook và posting chọn lọc.
+- Given operator chỉ muốn post lại một tập row/platform, when dùng CLI, then có cách giới hạn phạm vi posting.
+- Given operator chạy dry-run, when hệ thống xử lý workbook, then hệ thống hiển thị danh sách row/platform sẽ đăng nhưng không submit bài thật.
 
-##### 1. Home / Dashboard
+### FR-13 — Web UI Surface
 
-- Hiển thị danh sách bài viết từ Excel.
-- Bảng với columns: `#`, `Title`, `Sheet`, `Platforms`, `Status`, `Actions`.
-- Filter theo sheet/category.
-- Filter theo trạng thái (pending, posted, error).
-- Nút "Start Posting" để bắt đầu.
+Web UI là target của v2, chưa được xem là baseline hiện có.
 
-##### 2. Upload Page
+Web UI MVP phải cho phép:
 
-- Upload file Excel mới.
-- Validate format (kiểm tra headers).
-- Preview nội dung trước khi confirm.
+- Chọn hoặc nạp workbook.
+- Xem danh sách sheet và rows.
+- Xem trạng thái session/login theo platform.
+- Trigger posting jobs.
+- Xem kết quả posting theo row và platform.
 
-##### 3. Preview Page
+Preview và chỉnh sửa draft trong UI là desirable, nhưng không phải điều kiện tối thiểu để xem posting UI là usable.
 
-- Xem trước nội dung bài viết từng nền tảng cho 1 row.
-- Xem ảnh preview.
-- Cho phép chỉnh sửa nhỏ trước khi đăng (optional).
+Acceptance Criteria:
 
-##### 4. Posting Control
+- Given operator non-tech, when dùng UI, then họ có thể chọn workbook, chạy job, và xem trạng thái chính mà không cần CLI.
+- Given posting job đã chạy, when mở UI, then operator xem được kết quả theo row/platform.
 
-- Chọn sheet / rows cần đăng.
-- Chọn nền tảng muốn đăng (checkbox 8 nền tảng).
-- Số bài/nền tảng (mặc định 2).
-- Nút "Post Now" và "Schedule Post".
-- Realtime progress: hiển thị trạng thái từng nền tảng đang đăng.
+### FR-14 — Scheduling
 
-##### 5. Login Management
+Scheduling là target mở rộng sau posting core.
 
-- Hiển thị trạng thái login 8 nền tảng.
-- Nút "Login" để mở browser cho từng nền tảng.
-- Badge: ✅ Logged in / ❌ Not logged in / ⚠️ Session expired.
+Khi được triển khai, scheduling phải cho phép:
 
-##### 6. Schedule Management
+- Tạo lịch chạy local.
+- Lưu cấu hình lịch.
+- Trigger posting jobs theo giờ.
+- Lưu log từng lần chạy.
 
-- Danh sách job đã schedule.
-- Thêm/xóa/sửa schedule.
-- Lịch hiển thị các job sắp tới.
+Nếu scheduling chưa có, spec không được mô tả nó như một capability đã sẵn sàng.
 
-##### 7. History / Logs
+Acceptance Criteria:
 
-- Lịch sử đăng bài.
-- Log chi tiết từng lần chạy.
-- Export log.
+- Given operator tạo một lịch hợp lệ, when tới thời điểm chạy, then job posting được trigger tự động.
+- Given scheduled run hoàn tất hoặc lỗi, when operator xem lịch sử, then có log kết quả của lần chạy đó.
 
-#### UI Design
+## 11. Non-Functional Requirements
 
-- Mobile-responsive.
-- Dark/Light mode.
-- Vietnamese UI labels.
-- Real-time status updates (HTMX polling hoặc SSE).
+### 11.1 Reliability
 
-#### Acceptance Criteria
+- Lỗi ở một keyword, row, hoặc platform không được làm crash toàn bộ hệ thống.
+- Mọi kết quả lỗi phải có message đủ dùng để debug vận hành.
 
-- Người dùng non-tech có thể upload Excel → chọn bài → đăng → xem kết quả.
-- Không cần mở terminal.
-- Status cập nhật realtime khi đang đăng.
+### 11.2 Recoverability
 
----
+- Session hết hạn phải có luồng login lại rõ ràng.
+- Workbook đang bị lock phải được phát hiện và thông báo rõ.
 
-### FR-008 — Scheduled Posting
+### 11.3 Operability
 
-#### Description
-
-Hệ thống hỗ trợ hẹn giờ đăng bài.
-
-#### Schedule Types
-
-1. **One-time**: Đăng 1 lần vào thời điểm chỉ định.
-2. **Recurring daily**: Đăng hàng ngày vào giờ chỉ định.
-3. **Custom cron**: Biểu thức cron cho lịch tùy chỉnh.
-
-#### Schedule Config
-
-```yaml
-schedule:
-  type: one_time | daily | cron
-  time: "09:00"          # HH:MM format (local timezone)
-  date: "2026-06-10"     # For one-time only
-  cron: "0 9 * * 1-5"    # For cron type (Mon-Fri 9am)
-  timezone: "Asia/Ho_Chi_Minh"
-  posts_per_platform: 2
-  platforms:
-    - linkedin
-    - facebook
-    - twitter
-    - instagram
-    - pinterest
-    - threads
-    - tiktok
-    - youtube
-  sheet: "Payment"        # Optional: specific sheet
-```
+- Người dùng non-tech có thể vận hành qua workbook và CLI/UI tối thiểu.
+- Browser visible phải khả dụng khi cần login hoặc xác nhận thủ công.
 
-#### Rules
+### 11.4 Maintainability
 
-- Job queue persist qua restart (lưu SQLite hoặc file JSON).
-- Nếu miss scheduled time (máy tắt) → chạy ngay khi startup (configurable).
-- Log mỗi scheduled run.
-- Notification qua Web UI khi schedule chạy xong.
+- Mỗi platform phải là module riêng.
+- Posting core không được trộn chặt vào UI hoặc harvest pipeline.
+- Data contract parsing phải tách khỏi selector/UI detail.
 
-#### Acceptance Criteria
-
-- Schedule đăng 2 bài LinkedIn lúc 9:00 → 9:00 hệ thống tự đăng.
-- Schedule persist sau khi restart server.
-- Người dùng thấy schedule trong dashboard.
+### 11.5 Observability
 
----
+- Có log theo run.
+- Có trạng thái per row/per platform.
+- Có dấu vết `skip`, `error`, `login-required`, `posted-no-link`.
 
-## 11. Data Model
+### 11.6 Performance
 
-### 11.1 PostItem
+- Ưu tiên ổn định hơn tốc độ.
+- Không bắt buộc parallel posting tất cả platform trong MVP nếu điều đó làm tăng rủi ro anti-bot hoặc hỏng session.
 
-```python
-@dataclass
-class PostItem:
-    row_id: int                         # Col 1: #
-    title: str                          # Col 2: Trillion $ news Title
-    image_link: str | None              # Col 3: Image link (Google Drive)
-    image_local_path: str | None        # Local path after download
-    sheet_name: str                     # Sheet name (category)
-    platform_content: dict[str, str]    # Platform → content mapping
-    link_post: dict[str, str]           # Platform → post link mapping
-    status: str                         # overall status: pending/posting/done/error
-```
-
-### 11.2 PlatformSession
-
-```python
-@dataclass
-class PlatformSession:
-    platform: str
-    context_dir: str
-    is_logged_in: bool
-    last_login_check: datetime | None
-    last_error: str | None
-```
-
-### 11.3 PostJob
-
-```python
-@dataclass
-class PostJob:
-    job_id: str
-    created_at: datetime
-    scheduled_at: datetime | None
-    status: str                         # pending/running/completed/failed
-    sheet_name: str | None
-    row_ids: list[int]
-    platforms: list[str]
-    posts_per_platform: int
-    results: dict[str, dict]            # platform → {row_id: link}
-```
-
-### 11.4 ScheduledTask
-
-```python
-@dataclass
-class ScheduledTask:
-    task_id: str
-    schedule_type: str                  # one_time/daily/cron
-    schedule_config: dict
-    platforms: list[str]
-    posts_per_platform: int
-    sheet_name: str | None
-    is_active: bool
-    last_run: datetime | None
-    next_run: datetime | None
-```
-
----
-
-## 12. Configuration
-
-### 12.1 `.env`
-
-```env
-# Excel Input
-EXCEL_FILE=./Trillion $ news(1).xlsx
-
-# Image Storage
-IMAGE_DIR=./images
-
-# Browser Sessions
-BROWSER_SESSION_DIR=./.browser_sessions
-
-# Web UI
-WEB_HOST=0.0.0.0
-WEB_PORT=8080
-
-# Posting Config
-POSTS_PER_PLATFORM=2
-DELAY_BETWEEN_POSTS_SEC=15
-DELAY_BETWEEN_PLATFORMS_SEC=10
-
-# Scheduling
-TIMEZONE=Asia/Ho_Chi_Minh
-
-# Logging
-LOG_DIR=./logs
-LOG_LEVEL=INFO
-```
-
-### 12.2 `config.yaml`
-
-```yaml
-excel_file: "./Trillion $ news(1).xlsx"
-
-platforms:
-  linkedin:
-    enabled: true
-    url: "https://www.linkedin.com/feed/"
-    posts_per_run: 2
-  facebook:
-    enabled: true
-    url: "https://www.facebook.com/"
-    posts_per_run: 2
-  twitter:
-    enabled: true
-    url: "https://x.com/home"
-    posts_per_run: 2
-  instagram:
-    enabled: true
-    url: "https://www.instagram.com/"
-    posts_per_run: 2
-  pinterest:
-    enabled: true
-    url: "https://www.pinterest.com/pin-creation-tool/"
-    posts_per_run: 2
-  threads:
-    enabled: true
-    url: "https://www.threads.net/"
-    posts_per_run: 2
-  tiktok:
-    enabled: true
-    url: "https://www.tiktok.com/upload"
-    posts_per_run: 2
-  youtube:
-    enabled: true
-    url: "https://www.youtube.com/"
-    posts_per_run: 2
-
-posting:
-  delay_between_posts: 15
-  delay_between_platforms: 10
-  backup_excel_before_write: true
-  headless: false
-
-scheduling:
-  timezone: "Asia/Ho_Chi_Minh"
-  miss_fire_grace_time: 3600
-```
-
----
-
-## 13. CLI Commands
-
-### 13.1 Login
-
-```bash
-python main.py login --platform linkedin
-python main.py login --all
-```
-
-Mở browser để login từng nền tảng. Session lưu lại.
-
-### 13.2 Check Login Status
-
-```bash
-python main.py status
-```
-
-Hiển thị trạng thái login 8 nền tảng.
-
-### 13.3 Post
-
-```bash
-# Đăng 2 bài LinkedIn từ sheet Payment
-python main.py post --platform linkedin --sheet Payment --limit 2
-
-# Đăng lên tất cả nền tảng
-python main.py post --all --sheet Payment --limit 2
-
-# Đăng row cụ thể
-python main.py post --all --row 1 --row 2
-```
-
-### 13.4 Start Web UI
-
-```bash
-python main.py serve
-# → http://localhost:8080
-```
-
-### 13.5 Schedule
-
-```bash
-# Hẹn đăng lúc 9:00 ngày mai
-python main.py schedule --time "09:00" --date "2026-06-10" --all --sheet Payment --limit 2
-
-# Đăng hàng ngày 9:00 sáng
-python main.py schedule --daily --time "09:00" --all --limit 2
-
-# Xem schedule
-python main.py schedule --list
-
-# Xóa schedule
-python main.py schedule --remove JOB_ID
-```
-
----
-
-## 14. Folder Structure
-
-```text
-auto-trillion-news-post/
-├── SPEC.md
-├── README.md
-├── AGENTS.md
-├── requirements.txt
-├── .env
-├── .env.example
-├── .gitignore
-├── config.yaml
-├── main.py                          # CLI entry point
-├── Trillion $ news(1).xlsx          # Input Excel file
-│
-├── src/
-│   ├── __init__.py
-│   ├── config.py                    # AppConfig loader
-│   ├── models.py                    # Data models
-│   ├── excel_reader.py              # Read Excel input [NEW]
-│   ├── excel_writer.py              # Write Link Post back [REFACTOR]
-│   ├── image_downloader.py          # Download from Google Drive [NEW]
-│   ├── platform_base.py             # Base class for platform posters [NEW]
-│   ├── platforms/                   # Platform-specific posting modules [NEW]
-│   │   ├── __init__.py
-│   │   ├── linkedin.py
-│   │   ├── facebook.py
-│   │   ├── twitter.py
-│   │   ├── instagram.py
-│   │   ├── pinterest.py
-│   │   ├── threads.py
-│   │   ├── tiktok.py
-│   │   └── youtube.py
-│   ├── link_collector.py            # Capture post URLs [NEW]
-│   ├── session_manager.py           # Browser session management [NEW]
-│   ├── scheduler.py                 # APScheduler wrapper [NEW]
-│   ├── web/                         # Web UI [NEW]
-│   │   ├── __init__.py
-│   │   ├── app.py                   # FastAPI app
-│   │   ├── routes.py                # API routes
-│   │   ├── templates/               # Jinja2 HTML templates
-│   │   │   ├── base.html
-│   │   │   ├── dashboard.html
-│   │   │   ├── upload.html
-│   │   │   ├── preview.html
-│   │   │   ├── posting.html
-│   │   │   ├── login_status.html
-│   │   │   ├── schedule.html
-│   │   │   └── history.html
-│   │   └── static/                  # CSS, JS assets
-│   │       ├── style.css
-│   │       └── app.js
-│   └── logger.py
-│
-├── images/                          # Downloaded images
-├── logs/                            # Application logs
-├── .browser_sessions/               # Playwright persistent contexts
-│   ├── linkedin/
-│   ├── facebook/
-│   ├── twitter/
-│   ├── instagram/
-│   ├── pinterest/
-│   ├── threads/
-│   ├── tiktok/
-│   └── youtube/
-│
-├── docs/
-│   ├── HARNESS.md
-│   ├── ARCHITECTURE.md
-│   ├── FEATURE_INTAKE.md
-│   ├── CONTEXT_RULES.md
-│   └── ...
-│
-├── scripts/
-│   └── bin/
-│       └── harness-cli
-│
-└── tests/
-    ├── test_excel_reader.py
-    ├── test_image_downloader.py
-    ├── test_link_collector.py
-    ├── test_session_manager.py
-    └── test_platforms/
-        ├── test_linkedin.py
-        └── ...
-```
-
----
-
-## 15. Migration from v1
-
-### 15.1 Files to Keep
-
-| File | Action |
-|---|---|
-| `src/config.py` | Refactor — thêm platform configs |
-| `src/models.py` | Refactor — thay `NewsItem` bằng `PostItem` |
-| `src/assisted_posting.py` | Refactor → `src/platforms/linkedin.py` |
-| `main.py` | Refactor — thêm commands mới |
-| `.env` / `config.yaml` | Update — thêm configs mới |
-| `requirements.txt` | Update — thêm FastAPI, APScheduler, httpx |
-
-### 15.2 Files to Remove/Archive
-
-| File | Action |
-|---|---|
-| `src/searcher.py` | Archive — không còn search tin |
-| `src/filter.py` | Archive — không còn filter |
-| `src/image_capture.py` | Replace → `src/image_downloader.py` |
-| `src/ai_writer.py` | Archive — không còn tạo AI content |
-| `src/post_writer.py` | Archive — không còn write markdown posts |
-| `src/excel_store.py` | Refactor → `src/excel_reader.py` + `src/excel_writer.py` |
-| `keywords.txt` | Archive — không còn dùng |
-| `post_all.py` | Archive — thay bằng CLI + Web UI |
-
-### 15.3 New Files
-
-| File | Purpose |
-|---|---|
-| `src/excel_reader.py` | Đọc Excel input mới |
-| `src/excel_writer.py` | Ghi Link Post |
-| `src/image_downloader.py` | Tải ảnh Google Drive |
-| `src/platform_base.py` | Base class cho platform posters |
-| `src/platforms/*.py` | 8 platform modules |
-| `src/link_collector.py` | Thu thập link bài đăng |
-| `src/session_manager.py` | Quản lý browser sessions |
-| `src/scheduler.py` | Job scheduling |
-| `src/web/*` | Web UI |
-
----
-
-## 16. Implementation Plan
-
-### Phase 1 — Core Refactor (Foundation)
-
-Tasks:
-
-- Refactor `models.py` → `PostItem`, `PlatformSession`, `PostJob`.
-- Create `excel_reader.py` — đọc Excel theo schema mới.
-- Create `image_downloader.py` — tải ảnh Google Drive.
-- Create `session_manager.py` — quản lý browser sessions.
-- Create `platform_base.py` — abstract base class.
-- Refactor `config.py` — thêm platform configs.
-- Update `requirements.txt`.
-
-Acceptance:
-
-- `python main.py status` hiển thị 8 nền tảng.
-- Excel đọc đúng 2 sheet, parse đúng columns.
-
----
-
-### Phase 2 — Platform Posting Modules
-
-Tasks:
-
-- Implement `platforms/linkedin.py` (refactor từ `assisted_posting.py`).
-- Implement `platforms/facebook.py`.
-- Implement `platforms/twitter.py`.
-- Implement `platforms/instagram.py`.
-- Implement `platforms/pinterest.py`.
-- Implement `platforms/threads.py`.
-- Implement `platforms/tiktok.py`.
-- Implement `platforms/youtube.py`.
-- Implement `link_collector.py`.
-- Implement `excel_writer.py` — ghi Link Post.
-
-Acceptance:
-
-- `python main.py login --all` mở browser cho từng nền tảng.
-- `python main.py post --platform linkedin --limit 2` đăng 2 bài.
-- Link Post được ghi vào Excel.
-
----
-
-### Phase 3 — Web UI
-
-Tasks:
-
-- Setup FastAPI + Jinja2 + HTMX.
-- Implement Dashboard page.
-- Implement Upload page.
-- Implement Preview page.
-- Implement Posting Control page.
-- Implement Login Management page.
-- Implement History page.
-- Realtime posting status.
-
-Acceptance:
-
-- `python main.py serve` → http://localhost:8080.
-- Upload Excel → preview → chọn bài → đăng → xem link.
-- Non-tech user có thể sử dụng.
-
----
-
-### Phase 4 — Scheduling
-
-Tasks:
-
-- Implement `scheduler.py` với APScheduler.
-- Implement Schedule Management page (Web UI).
-- Implement schedule CLI commands.
-- Persist jobs qua restart.
-
-Acceptance:
-
-- Schedule đăng 9:00 → hệ thống tự đăng đúng giờ.
-- Job list hiển thị trong Web UI.
-- Jobs persist qua restart.
-
----
-
-## 17. Validation Rules
-
-### 17.1 Excel Input Validation
-
-- File phải có extension `.xlsx`.
-- Mỗi sheet phải có header row đúng format.
-- Col 1 (`#`) phải là số.
-- Col 2 (`Title`) không được rỗng cho row hợp lệ.
-
-### 17.2 Platform Content Validation
-
-- Nội dung rỗng, `None`, hoặc chỉ chứa `.` / spaces → skip nền tảng đó.
-- X (Twitter) content > 280 chars → truncate hoặc warning.
-- Instagram/Pinterest phải có ảnh → nếu không có ảnh → warning.
-
-### 17.3 Post Link Validation
-
-- Link phải bắt đầu bằng `https://`.
-- Link phải chứa domain tương ứng platform.
-
----
-
-## 18. Error Handling
-
-| Error | Expected Behavior |
-|---|---|
-| Excel file not found | Show clear error, suggest upload |
-| Excel format invalid | Show validation errors, list bad columns |
-| Google Drive link expired | Skip image, continue with text-only post |
-| Image download timeout | Skip image, log warning |
-| Platform login expired | Prompt re-login, skip platform this run |
-| Platform UI changed | Stop that platform, log error, continue others |
-| Post failed | Log error, mark `[error]` in Link Post, continue |
-| Link capture failed | Mark `[posted-no-link]`, continue |
-| Excel file locked | Retry 3x with 2s delay, then error |
-| Scheduled job missed | Run immediately on next startup (configurable) |
-| Browser crash | Clean shutdown, log error, report in UI |
-
----
-
-## 19. Logging
-
-### 19.1 Log Location
-
-```text
-logs/YYYY-MM-DD.log
-```
-
-### 19.2 Log Examples
-
-```text
-[INFO] 2026-06-10 09:00:01 — Reading Excel: Trillion $ news(1).xlsx
-[INFO] 2026-06-10 09:00:01 — Found 2 sheets: Payment (134 rows), Charity & Tokenization (2 rows)
-[INFO] 2026-06-10 09:00:02 — Downloading image for row 1: payment_001_merchant_payments.png
-[INFO] 2026-06-10 09:00:05 — Starting LinkedIn posting (2 posts)
-[INFO] 2026-06-10 09:00:10 — LinkedIn: Posted row 1 — https://linkedin.com/feed/update/...
-[INFO] 2026-06-10 09:00:25 — LinkedIn: Posted row 2 — https://linkedin.com/feed/update/...
-[INFO] 2026-06-10 09:00:30 — Starting Facebook posting (2 posts)
-[WARN] 2026-06-10 09:00:35 — Facebook: Login session expired, skipping
-[INFO] 2026-06-10 09:00:40 — Starting X/Twitter posting (2 posts)
-[ERROR] 2026-06-10 09:01:00 — X/Twitter: Post failed for row 1 — Timeout waiting for post button
-[INFO] 2026-06-10 09:01:15 — Excel updated: Link Post column for rows 1, 2
-[INFO] 2026-06-10 09:01:16 — Run completed: 4 posted, 1 skipped, 1 error
-```
-
----
-
-## 20. Security Requirements
-
-- Không lưu password người dùng.
-- Browser session data lưu local, không upload.
-- `.browser_sessions/` phải nằm trong `.gitignore`.
-- `.env` phải nằm trong `.gitignore`.
-- Web UI chỉ chạy local (mặc định `localhost`).
-- Không expose Web UI ra internet nếu không có authentication.
-
----
-
-## 21. Test Plan
-
-### 21.1 Unit Tests
-
-- `test_excel_reader.py`: Đọc Excel đúng schema, xử lý empty cells.
-- `test_image_downloader.py`: Parse Google Drive URL, download mock.
-- `test_link_collector.py`: Parse link từ URL pattern.
-- `test_session_manager.py`: Check login status logic.
-
-### 21.2 Integration Tests
-
-- Đăng 1 bài LinkedIn test → verify link capture.
-- Đọc Excel → download image → post → ghi link → verify Excel.
-
-### 21.3 Manual Tests
-
-- Non-tech user test Web UI flow.
-- Schedule job → verify auto-run.
-- Session expire → verify re-login flow.
-
----
-
-## 22. Acceptance Criteria for v2 MVP
-
-v2 MVP hoàn thành khi:
-
-1. ✅ Đọc được file `Trillion $ news(1).xlsx` với tất cả sheets.
-2. ✅ Tải ảnh từ Google Drive links.
-3. ✅ Login thành công 8 nền tảng (persistent session).
-4. ✅ Đăng bài thành công lên ít nhất 3 nền tảng (LinkedIn, Facebook, X).
-5. ✅ Mỗi nền tảng đăng 2 bài/lần chạy.
-6. ✅ Thu thập link bài đăng → ghi vào cột `Link Post`.
-7. ✅ CLI interface hoạt động.
-8. ✅ Web UI dashboard hoạt động cho non-tech user.
-9. ✅ Hẹn giờ đăng bài hoạt động.
-10. ✅ Không crash khi 1 nền tảng lỗi → tiếp tục nền tảng khác.
-
----
-
-## 23. Example Run
-
-### 23.1 CLI Run
-
-```bash
-# Step 1: Login tất cả nền tảng (lần đầu)
-python main.py login --all
-
-# Step 2: Đăng 2 bài cho mỗi nền tảng từ sheet Payment
-python main.py post --all --sheet Payment --limit 2
-
-# Output:
-# [INFO] Reading Excel: Trillion $ news(1).xlsx
-# [INFO] Sheet Payment: 134 rows
-# [INFO] Downloading image for row 1...
-# [INFO] Downloading image for row 2...
-# [INFO] LinkedIn: Posting row 1...  ✅ https://linkedin.com/...
-# [INFO] LinkedIn: Posting row 2...  ✅ https://linkedin.com/...
-# [INFO] Facebook: Posting row 1... ✅ https://facebook.com/...
-# [INFO] Facebook: Posting row 2... ✅ https://facebook.com/...
-# ...
-# [INFO] Excel updated: Link Post for rows 1, 2
-# [INFO] Done. 16 posts across 8 platforms.
-```
-
-### 23.2 Excel After Run
-
-| # | Title | Image link | ... | Link Post |
-|---:|---|---|---|---|
-| 1 | Merchant Payments: a $100 Trillion... | https://drive.google.com/... | ... | LinkedIn: https://linkedin.com/...<br>Facebook: https://facebook.com/...<br>X: https://x.com/...<br>Instagram: [posted-no-link]<br>Pinterest: https://pinterest.com/...<br>Threads: https://threads.net/...<br>TikTok: [skip] No content<br>YouTube: [skip] No content |
-
----
-
-## 24. Future Enhancements
-
-Sau v2 MVP, có thể nâng cấp:
-
-1. Google Sheet API integration (đọc/ghi trực tiếp Google Sheet thay vì file Excel).
-2. Telegram/Slack notification khi đăng xong hoặc lỗi.
-3. Multi-account support (nhiều tài khoản cho 1 nền tảng).
-4. AI content regeneration cho nền tảng chưa có nội dung.
-5. Analytics dashboard (engagement tracking).
-6. Bulk retry cho các bài bị lỗi.
-7. A/B testing — đăng 2 version content khác nhau.
-8. Image editing/branding overlay tự động.
-9. Mobile-responsive Web UI hoàn chỉnh.
-10. Docker deployment cho team sử dụng.
-
----
-
-## 25. Brownfield Migration Notes
-
-### v1 → v2 Key Changes
-
-| Aspect | v1 | v2 |
-|---|---|---|
-| Input | Search Google/Bing → filter | File Excel đã có sẵn |
-| Content | AI generate | Có sẵn trong Excel |
-| Platforms | LinkedIn only | 8 nền tảng |
-| Posting | Assisted (human click Post) | Full auto-post |
-| Output | Markdown files + Excel | Link Post trong Excel |
-| UI | CLI only | CLI + Web UI |
-| Scheduling | None | APScheduler |
-| Architecture | Monolith main.py | Modular platform plugins |
-
-### Breaking Changes
-
-- `NewsItem` model thay bằng `PostItem`.
-- Excel schema hoàn toàn khác (input vs output columns).
-- CLI commands thay đổi hoàn toàn.
-- `src/searcher.py`, `src/filter.py`, `src/ai_writer.py` bị archive.
-
-### Backward Compatibility
-
-- v1 code được archive trong branch `v1-archive`.
-- v1 output folder (`output/`) không bị xóa.
-- v1 `.env` keys vẫn hoạt động nhưng thêm keys mới.
+## 12. Approved Technical Direction
+
+Phần này chỉ chốt các assumption công nghệ đã được repo và quyết định hiện có hỗ trợ:
+
+- Runtime: Python 3.11+.
+- Browser automation: Playwright.
+- Workbook I/O: `openpyxl`.
+- AI provider mặc định: Google Gemini.
+- Storage: local filesystem; có thể có SQLite cục bộ nếu scheduling/history cần.
+
+Các chi tiết kiến trúc cụ thể thuộc `docs/ARCHITECTURE.md`, không nên tiếp tục nở ra trong spec này.
+
+## 13. Assumptions
+
+- Operator có quyền đăng bài trên các account social tương ứng.
+- Các account có thể được login thủ công ít nhất một lần khi cần khởi tạo session.
+- Workbook customer giữ nguyên schema 12 cột trong MVP, trừ trường hợp hệ thống tự bổ sung `Link Post` khi bị thiếu.
+- Google Drive image link phải public hoặc truy cập được mà không cần login Google bổ sung trong luồng tải ảnh.
+- Browser automation có thể bị ảnh hưởng bởi UI thay đổi, captcha, rate limit, account restriction, hoặc thay đổi chính sách nền tảng.
+
+## 14. Open Questions
+
+- YouTube Community Post có khả dụng trên channel khách hàng hay không?
+- TikTok photo/image post có khả dụng trên account khách hàng hay không?
+- Có cần hỗ trợ nhiều workbook cùng lúc hay chỉ một workbook vận hành tại một thời điểm?
+- Backup workbook có được bật mặc định trong môi trường production nội bộ hay chỉ bật theo config?
+- Dry-run có cần xuất ra file/report ngoài console hay chỉ cần hiển thị trong CLI/UI là đủ?
+
+## 15. Workbook Backup and Dry-Run Safety
+
+### 15.1 Workbook Backup Safety
+
+- Trước khi ghi `Link Post`, hệ thống nên tạo bản backup workbook theo timestamp để có thể khôi phục khi write-back lỗi.
+- Backup path, retention, và quyền bật/tắt backup nên được cấu hình được.
+- Nếu backup thất bại và policy yêu cầu backup bắt buộc, hệ thống không nên tiếp tục write-back thật.
+
+### 15.2 Dry-Run Safety
+
+- Dry-run là chế độ kiểm tra trước khi post thật cho Pipeline B.
+- Dry-run phải cho biết sheet nào, row nào, platform nào sẽ được post sau khi áp dụng selective posting rule và posting limits.
+- Dry-run không được submit bài, không được thay đổi session, và không được ghi `Link Post` thật vào workbook chính.
+
+## 16. Minimum Logging Contract
+
+Mỗi log event quan trọng trong Pipeline A hoặc Pipeline B nên có tối thiểu các field sau:
+
+- `run_id`
+- `timestamp`
+- `sheet_name`
+- `row_id`
+- `platform`
+- `action`
+- `status`
+- `message`
+
+Contract log tối thiểu này tồn tại để:
+
+- Hỗ trợ debug khi posting lỗi.
+- Làm nền cho dashboard/history về sau.
+- Giúp reviewer và operator truy lại đúng row/platform/action của từng run.
+
+## 17. Security, Session, and Platform Risk
+
+### 17.1 Security Rules
+
+- Hệ thống không được lưu raw password vào workbook, log, hoặc source code.
+- Session local phải được xem là dữ liệu nhạy cảm và chỉ lưu trên máy vận hành được kiểm soát.
+- Log không được vô tình lộ secrets, cookie, hoặc token đăng nhập.
+
+### 17.2 Platform Automation Rules
+
+- Hệ thống không có mục tiêu bypass captcha hoặc né anti-bot.
+- Khi nền tảng yêu cầu xác minh, hệ thống phải dừng ở mức an toàn hoặc yêu cầu operator can thiệp.
+- Operator chịu trách nhiệm tuân thủ ToS và chính sách sử dụng của từng nền tảng.
+
+### 17.3 Operational Risk Controls
+
+- Mặc định giới hạn posting là 2 bài mỗi platform mỗi lần chạy để giảm rủi ro.
+- Session hết hạn, selector thay đổi, captcha, rate limit, hoặc account restriction phải được xem là rủi ro vận hành bình thường của hệ thống này.
+- TikTok và YouTube là hai nền tảng rủi ro cao hơn, nên scope MVP của chúng bị giới hạn hơn các platform còn lại.
+
+## 18. Release Boundaries
+
+### Release A — Brownfield Stabilization
+
+Bao gồm:
+
+- Giữ ổn định `init`, `search`, `generate`, `run`, `post`.
+- Chốt lại contract workbook nội bộ.
+- Chuẩn hóa logging, config, và error handling tối thiểu.
+
+Done khi:
+
+- Baseline tests còn pass.
+- Không có hiểu nhầm giữa baseline đã có và target chưa làm.
+
+### Release B1 — Business Workbook + Shared Posting Core
+
+Bao gồm:
+
+- Ghi kết quả Pipeline A trực tiếp vào `Trillion $ news.xlsx`.
+- Đọc workbook business nhiều sheet.
+- Header normalization.
+- Selective posting.
+- Image resolution.
+- Shared posting core.
+- Write-back `Link Post`.
+- Hỗ trợ end-to-end trước cho LinkedIn, Facebook, và X.
+
+Done khi:
+
+- Có thể đi từ keyword đến `Trillion $ news.xlsx` mà không cần sửa tay schema.
+- Excel đóng vai trò review gate trước khi post.
+- LinkedIn, Facebook, và X chạy được theo selective posting rule và write-back `Link Post`.
+
+### Release B2 — Image-First and Mid-Risk Platforms
+
+Bao gồm:
+
+- Instagram.
+- Pinterest.
+- Threads.
+- Ổn định thêm các rule media handling và login/session cho nhóm platform này.
+
+Done khi:
+
+- Instagram, Pinterest, và Threads chạy được theo capability matrix đã chốt.
+- Không đăng trùng khi `Link Post` đã có kết quả thành công.
+
+### Release B3 — High-Risk / Best-Effort Platforms
+
+Bao gồm:
+
+- TikTok photo/image posting mode nếu account/UI hỗ trợ.
+- YouTube Community Post mode nếu channel hỗ trợ.
+- Best-effort permalink capture cho hai nền tảng này.
+
+Done khi:
+
+- Scope của TikTok và YouTube được chốt rõ theo mode MVP, không bị hiểu thành video upload tổng quát.
+- Có thể chứng minh flow customer từ keyword → draft Excel → posting → write-back `Link Post` cho các mode đã chốt.
+
+### Release C — Web UI and Scheduling
+
+Bao gồm:
+
+- Web UI cho vận hành non-tech.
+- Scheduling local.
+- Dashboard và history cơ bản.
+
+Done khi:
+
+- Người vận hành non-tech có thể chạy các flow chính qua UI.
+- Có thể cấu hình hoặc hẹn giờ các đợt post thay cho thao tác CLI thuần.
+
+## 19. Final Acceptance Statement
+
+SPEC này được xem là final cho mục đích brownfield realignment khi thỏa đồng thời các điều sau:
+
+- Không còn conflict marker, section lặp, hoặc hai product truth mâu thuẫn trong cùng file.
+- Baseline hiện có và target v2 được tách bạch rõ ràng.
+- Hai workbook contract được mô tả rõ và không xung đột.
+- Các phần chưa implemented không bị mô tả như đã sẵn sàng.
+- Các giá trị đáng ra thuộc config không còn bị hard-code thành product truth.
+- Có `User Requirements`, platform capability matrix, acceptance criteria theo FR, và phần security/risk đủ rõ để dev/reviewer dùng làm chuẩn.
+- Có `Assumptions`, `Open Questions`, `Workbook Backup and Dry-Run Safety`, và `Minimum Logging Contract` để implementation không bị thiếu guardrails vận hành.
+
+Từ thời điểm này, công việc tiếp theo nên ưu tiên:
+
+1. Tách product docs nhỏ hơn từ spec này.
+2. Tạo story packets theo release boundary.
+3. Triển khai và chứng minh dần từng năng lực thay vì tiếp tục mở rộng một spec đơn khối.
