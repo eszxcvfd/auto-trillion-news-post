@@ -1,0 +1,2195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trillion News Auto Post - Operator Surface</title>
+  <!-- Google Fonts Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-primary: #090a10;
+      --bg-secondary: rgba(17, 19, 34, 0.75);
+      --bg-tertiary: rgba(28, 30, 52, 0.5);
+      --bg-card: rgba(25, 27, 48, 0.45);
+      
+      --accent-violet: #7c4dff;
+      --accent-cyan: #00e5ff;
+      --accent-glow: rgba(124, 77, 255, 0.15);
+      
+      --text-main: #f5f6fa;
+      --text-muted: #8f9cae;
+      --text-dark: #12131a;
+      
+      --border-color: rgba(255, 255, 255, 0.08);
+      --border-hover: rgba(255, 255, 255, 0.15);
+      
+      --shadow-premium: 0 12px 40px 0 rgba(0, 0, 0, 0.5);
+      --glass-blur: blur(16px);
+      
+      --status-success: #00e676;
+      --status-error: #ff1744;
+      --status-warning: #ffd600;
+      --status-info: #2979ff;
+      --status-pending: #ff9100;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: var(--bg-primary);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      overflow-x: hidden;
+      background-image: 
+        radial-gradient(circle at 10% 20%, rgba(124, 77, 255, 0.08) 0%, transparent 40%),
+        radial-gradient(circle at 90% 80%, rgba(0, 229, 255, 0.05) 0%, transparent 40%);
+    }
+
+    /* Scrollbars */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(255, 255, 255, 0.02);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--accent-violet);
+    }
+
+    /* Sidebar Layout */
+    .sidebar {
+      width: 280px;
+      background: var(--bg-secondary);
+      backdrop-filter: var(--glass-blur);
+      border-right: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      position: fixed;
+      left: 0;
+      top: 0;
+      z-index: 100;
+    }
+
+    .brand {
+      padding: 30px 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .brand-logo {
+      width: 36px;
+      height: 36px;
+      background: linear-gradient(135deg, var(--accent-violet), var(--accent-cyan));
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      color: #fff;
+      font-size: 1.2rem;
+      box-shadow: 0 0 20px var(--accent-glow);
+    }
+
+    .brand-name {
+      font-weight: 700;
+      font-size: 1.1rem;
+      letter-spacing: 0.5px;
+      background: linear-gradient(to right, #fff, var(--text-muted));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .menu {
+      list-style: none;
+      padding: 24px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      flex-grow: 1;
+    }
+
+    .menu-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      color: var(--text-muted);
+      text-decoration: none;
+      border-radius: 8px;
+      font-weight: 500;
+      font-size: 0.95rem;
+      transition: all 0.3s ease;
+      cursor: pointer;
+    }
+
+    .menu-item svg {
+      width: 20px;
+      height: 20px;
+      stroke: currentColor;
+      stroke-width: 2;
+      fill: none;
+    }
+
+    .menu-item:hover, .menu-item.active {
+      color: #fff;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      box-shadow: inset 0 0 10px rgba(255, 255, 255, 0.02);
+    }
+
+    .menu-item.active {
+      border-left: 3px solid var(--accent-violet);
+    }
+
+    .sidebar-footer {
+      padding: 20px;
+      border-top: 1px solid var(--border-color);
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      text-align: center;
+    }
+
+    /* Main Content */
+    .main-container {
+      margin-left: 280px;
+      flex-grow: 1;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      padding: 24px 40px;
+      background: rgba(9, 10, 16, 0.6);
+      backdrop-filter: var(--glass-blur);
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 90;
+    }
+
+    .header-left h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .workbook-status {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--status-success);
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .btn {
+      padding: 10px 20px;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      background: var(--bg-tertiary);
+      color: #fff;
+      font-weight: 500;
+      font-size: 0.9rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.3s ease;
+    }
+
+    .btn:hover {
+      background: var(--border-hover);
+      border-color: var(--text-muted);
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent-violet), #6200ea);
+      border: none;
+      box-shadow: 0 4px 15px rgba(124, 77, 255, 0.3);
+    }
+
+    .btn-primary:hover {
+      box-shadow: 0 4px 20px rgba(124, 77, 255, 0.5);
+      background: linear-gradient(135deg, #8c66ff, #651fff);
+    }
+
+    .btn-secondary {
+      background: transparent;
+      border: 1px solid var(--accent-cyan);
+      color: var(--accent-cyan);
+    }
+
+    .btn-secondary:hover {
+      background: rgba(0, 229, 255, 0.05);
+    }
+
+    .content-viewport {
+      padding: 40px;
+      flex-grow: 1;
+    }
+
+    /* Views */
+    .view {
+      display: none;
+    }
+
+    .view.active {
+      display: block;
+      animation: fadeIn 0.4s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Cards */
+    .card {
+      background: var(--bg-card);
+      backdrop-filter: var(--glass-blur);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 24px;
+      box-shadow: var(--shadow-premium);
+    }
+
+    .card-title {
+      font-size: 1.15rem;
+      font-weight: 600;
+      margin-bottom: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    /* Table Grid */
+    .table-container {
+      overflow-x: auto;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 0.9rem;
+    }
+
+    th {
+      background: rgba(255, 255, 255, 0.03);
+      padding: 14px 16px;
+      color: var(--text-muted);
+      font-weight: 600;
+      border-bottom: 1px solid var(--border-color);
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    td {
+      padding: 16px;
+      border-bottom: 1px solid var(--border-color);
+      vertical-align: middle;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    tr:hover td {
+      background: rgba(255, 255, 255, 0.01);
+    }
+
+    /* Custom Badges */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+    }
+
+    .badge-success { background: rgba(0, 230, 118, 0.1); color: var(--status-success); }
+    .badge-error { background: rgba(255, 23, 68, 0.1); color: var(--status-error); }
+    .badge-warning { background: rgba(255, 214, 0, 0.1); color: var(--status-warning); }
+    .badge-info { background: rgba(41, 121, 255, 0.1); color: var(--status-info); }
+    .badge-pending { background: rgba(255, 145, 0, 0.1); color: var(--status-pending); }
+    .badge-muted { background: rgba(255, 255, 255, 0.05); color: var(--text-muted); }
+
+    /* Expandable details styling */
+    .expanded-row-details {
+      background: rgba(0, 0, 0, 0.2);
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .expanded-content {
+      padding: 20px 24px;
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 30px;
+    }
+
+    .drafts-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+
+    .draft-item {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 12px 16px;
+    }
+
+    .draft-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--accent-cyan);
+    }
+
+    .draft-body {
+      font-family: monospace;
+      font-size: 0.8rem;
+      white-space: pre-wrap;
+      max-height: 120px;
+      overflow-y: auto;
+      color: var(--text-main);
+      padding: 8px;
+      background: rgba(0,0,0,0.15);
+      border-radius: 4px;
+    }
+
+    /* Tabs */
+    .tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 1px;
+    }
+
+    .tab {
+      padding: 10px 20px;
+      cursor: pointer;
+      font-weight: 500;
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      border-bottom: 2px solid transparent;
+      transition: all 0.3s ease;
+    }
+
+    .tab:hover, .tab.active {
+      color: #fff;
+    }
+
+    .tab.active {
+      border-color: var(--accent-violet);
+    }
+
+    /* Modal Overlay Console */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(9, 10, 16, 0.85);
+      backdrop-filter: var(--glass-blur);
+      z-index: 1000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-card {
+      background: var(--bg-card);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 20px;
+      width: 650px;
+      max-width: 90%;
+      padding: 32px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7);
+      animation: modalScale 0.3s cubic-bezier(0.19, 1, 0.22, 1);
+    }
+
+    @keyframes modalScale {
+      from { transform: scale(0.9); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+
+    .modal-header {
+      font-size: 1.3rem;
+      font-weight: 700;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      color: var(--accent-cyan);
+    }
+
+    .modal-body {
+      margin-bottom: 24px;
+      line-height: 1.5;
+    }
+
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+    }
+
+    /* Forms */
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .form-control {
+      width: 100%;
+      padding: 12px 16px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      color: #fff;
+      font-family: inherit;
+      font-size: 0.95rem;
+      transition: all 0.3s ease;
+    }
+
+    .form-control:focus {
+      outline: none;
+      border-color: var(--accent-violet);
+      box-shadow: 0 0 10px rgba(124, 77, 255, 0.25);
+    }
+
+    .row-meta-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .meta-box {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 12px;
+      text-align: center;
+    }
+
+    .meta-label {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+
+    .meta-val {
+      font-size: 1rem;
+      font-weight: 600;
+      color: #fff;
+    }
+
+    /* Sessions grid */
+    .sessions-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px;
+    }
+
+    .session-card {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: justify-content;
+      gap: 16px;
+    }
+
+    .session-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 10px;
+      background: var(--bg-tertiary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      color: var(--accent-cyan);
+    }
+
+    .session-info {
+      flex-grow: 1;
+    }
+
+    .session-name {
+      font-weight: 600;
+      font-size: 1rem;
+      margin-bottom: 4px;
+    }
+
+    /* Toast system */
+    .toast-container {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      z-index: 1100;
+    }
+
+    .toast {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-left: 4px solid var(--accent-violet);
+      padding: 16px 20px;
+      border-radius: 8px;
+      box-shadow: var(--shadow-premium);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 300px;
+      animation: slideIn 0.3s ease forwards;
+    }
+
+    @keyframes slideIn {
+      from { transform: translateX(100%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+
+    .toast-success { border-left-color: var(--status-success); }
+    .toast-error { border-left-color: var(--status-error); }
+    .toast-warning { border-left-color: var(--status-warning); }
+
+    .toast-content {
+      font-size: 0.9rem;
+      font-weight: 500;
+    }
+
+    /* Planner result platform summary */
+    .planner-platform-card {
+      margin-bottom: 16px;
+      border: 1px solid rgba(255,255,255,0.05);
+      border-radius: 8px;
+      background: rgba(255,255,255,0.01);
+    }
+
+    .planner-platform-header {
+      padding: 12px 16px;
+      background: rgba(255,255,255,0.03);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-weight: 600;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .spinner {
+      border: 3px solid rgba(255, 255, 255, 0.1);
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      border-left-color: var(--accent-cyan);
+      animation: spin 1s linear infinite;
+      display: inline-block;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    /* Switch Slider */
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 44px;
+      height: 22px;
+      vertical-align: middle;
+    }
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: rgba(255, 255, 255, 0.1);
+      transition: .3s;
+      border-radius: 22px;
+      border: 1px solid var(--border-color);
+    }
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 14px;
+      width: 14px;
+      left: 3px;
+      bottom: 3px;
+      background-color: var(--text-muted);
+      transition: .3s;
+      border-radius: 50%;
+    }
+    input:checked + .slider {
+      background-color: rgba(124, 77, 255, 0.2);
+      border-color: var(--accent-violet);
+    }
+    input:checked + .slider:before {
+      transform: translateX(22px);
+      background-color: var(--accent-cyan);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="brand">
+      <div class="brand-logo">T</div>
+      <div class="brand-name">Trillion News Post</div>
+    </div>
+    
+    <ul class="menu">
+      <li class="menu-item active" onclick="switchView('dashboard')">
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9"></rect><rect x="14" y="3" width="7" height="5"></rect><rect x="14" y="12" width="7" height="9"></rect><rect x="3" y="16" width="7" height="5"></rect></svg>
+        Dashboard
+      </li>
+      <li class="menu-item" onclick="switchView('planner')">
+        <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+        Posting Plan
+      </li>
+      <li class="menu-item" onclick="switchView('sessions')">
+        <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+        Session Status
+      </li>
+      <li class="menu-item" onclick="switchView('writeback')">
+        <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4z"></path></svg>
+        Manual Write-back
+      </li>
+      <li class="menu-item" onclick="switchView('config')">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+        System Config
+      </li>
+      <li class="menu-item" onclick="switchView('schedules')">
+        <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+        Schedules
+      </li>
+      <li class="menu-item" onclick="switchView('history')">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+        Run History
+      </li>
+    </ul>
+    
+    <div class="sidebar-footer">
+      <div>Local Operator Surface</div>
+      <div style="margin-top: 4px; font-weight: 600;">Active Session: Local</div>
+    </div>
+  </div>
+
+  <!-- Main Container -->
+  <div class="main-container">
+    <header>
+      <div class="header-left">
+        <h1 id="view-title">Dashboard</h1>
+        <div class="workbook-status">
+          <div class="status-dot"></div>
+          <span id="active-workbook-label">Loading workbook...</span>
+        </div>
+      </div>
+      
+      <div class="header-right">
+        <button class="btn" onclick="refreshCurrentView()">
+          <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+          Refresh
+        </button>
+      </div>
+    </header>
+
+    <div class="content-viewport">
+      <!-- Dashboard View -->
+      <div id="view-dashboard" class="view active">
+        <div class="card">
+          <div class="card-title">
+            <span>Workbook Inspection</span>
+            <div id="dashboard-warnings" style="font-size:0.85rem; color:var(--status-warning);"></div>
+          </div>
+          
+          <div id="sheet-tabs" class="tabs">
+            <!-- Tabs generated dynamically -->
+          </div>
+          
+          <div class="table-container">
+            <table id="workbook-table">
+              <thead>
+                <tr>
+                  <th style="width: 50px;">#</th>
+                  <th>Title</th>
+                  <th>Image Path / Drive URL</th>
+                  <th>Link Post Status</th>
+                  <th style="text-align: right; width: 120px;">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="workbook-table-body">
+                <!-- Rows loaded dynamically -->
+                <tr><td colspan="5" style="text-align:center; padding: 40px; color:var(--text-muted);">Loading sheets...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Plan View -->
+      <div id="view-planner" class="view">
+        <div class="card">
+          <div class="card-title">Generate Posting Plan (Dry-Run)</div>
+          
+          <div class="row-meta-grid">
+            <div class="form-group" style="grid-column: span 2;">
+              <label for="planner-platforms">Platforms to Plan For</label>
+              <input type="text" id="planner-platforms" class="form-control" value="linkedin, facebook, x, instagram, pinterest, threads, tiktok, youtube">
+            </div>
+            <div class="form-group">
+              <label for="planner-limit">Post Limit Per Platform</label>
+              <input type="number" id="planner-limit" class="form-control" value="2" min="1">
+            </div>
+          </div>
+          
+          <button class="btn btn-primary" onclick="generatePlan()">Generate Posting Plan</button>
+        </div>
+        
+        <div id="plan-results" style="display:none;">
+          <div class="card">
+            <div class="card-title">Posting Candidates Plan</div>
+            <div id="plan-candidates-container"></div>
+          </div>
+          
+          <div class="card">
+            <div class="card-title">Skipped / Excluded Rows Details</div>
+            <ul id="plan-skipped-list" style="margin-left:20px; color:var(--text-muted); line-height:1.6;">
+              <!-- Skipped details -->
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sessions View -->
+      <div id="view-sessions" class="view">
+        <div class="card">
+          <div class="card-title">
+            <span>Platform Session Status</span>
+            <button class="btn btn-secondary" onclick="checkSessions()">Verify Sessions</button>
+          </div>
+          
+          <div class="sessions-grid" id="sessions-container">
+            <!-- Sessions loaded dynamically -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Write-back View -->
+      <div id="view-writeback" class="view">
+        <div class="card" style="max-width: 600px;">
+          <div class="card-title">Manual Result Write-back</div>
+          
+          <form id="writeback-form" onsubmit="submitWriteback(event)">
+            <div class="form-group">
+              <label for="wb-sheet">Category Sheet Name</label>
+              <input type="text" id="wb-sheet" class="form-control" placeholder="e.g. Payment" required>
+            </div>
+            
+            <div class="form-group">
+              <label for="wb-row">Row Index (1-based, matching Excel row number)</label>
+              <input type="number" id="wb-row" class="form-control" placeholder="e.g. 2" required min="1">
+            </div>
+            
+            <div class="form-group">
+              <label for="wb-platform">Platform Name</label>
+              <select id="wb-platform" class="form-control" required>
+                <option value="linkedin">LinkedIn</option>
+                <option value="facebook">Facebook</option>
+                <option value="x">X (Twitter)</option>
+                <option value="instagram">Instagram</option>
+                <option value="pinterest">Pinterest</option>
+                <option value="threads">Threads</option>
+                <option value="tiktok">TikTok</option>
+                <option value="youtube">YouTube</option>
+              </select>
+            </div>
+            
+            <div class="form-group">
+              <label for="wb-status">Status Value</label>
+              <input type="text" id="wb-status" class="form-control" placeholder="e.g. https://... or [skip] reason" required>
+              <small style="color:var(--text-muted); font-size:0.75rem; margin-top:4px; display:block;">
+                For success: Enter URL or [posted-no-link]. For skip: [skip] &lt;reason&gt;. For error: [error] &lt;reason&gt;.
+              </small>
+            </div>
+            
+            <button type="submit" class="btn btn-primary" style="margin-top:10px;">Write Result to Cell</button>
+          </form>
+        </div>
+      </div>
+
+      <!-- Config View -->
+      <div id="view-config" class="view">
+        <div class="card">
+          <div class="card-title">System Paths</div>
+          <div style="display:grid; grid-template-columns: 1fr 2fr; gap: 12px; font-size:0.95rem;">
+            <div style="color:var(--text-muted)">Active Workbook:</div>
+            <div id="cfg-excel" style="font-family:monospace; word-break:break-all;"></div>
+            
+            <div style="color:var(--text-muted)">Output Folder:</div>
+            <div id="cfg-output" style="font-family:monospace;"></div>
+            
+            <div style="color:var(--text-muted)">Image Folder:</div>
+            <div id="cfg-image" style="font-family:monospace;"></div>
+            
+            <div style="color:var(--text-muted)">Post Folder:</div>
+            <div id="cfg-post" style="font-family:monospace;"></div>
+            
+            <div style="color:var(--text-muted)">Log Folder:</div>
+            <div id="cfg-log" style="font-family:monospace;"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Change Active Workbook</div>
+          <div class="form-group">
+            <label for="wb-custom-path">Enter custom workbook path or choose below</label>
+            <div style="display:flex; gap:10px;">
+              <input type="text" id="wb-custom-path" class="form-control" placeholder="Absolute or relative path to .xlsx file">
+              <button class="btn btn-primary" onclick="setWorkbookPath()">Set Workbook</button>
+            </div>
+          </div>
+          
+          <div class="table-container" style="margin-top:20px;">
+            <table>
+              <thead>
+                <tr>
+                  <th>Workbook Name</th>
+                  <th>Location</th>
+                  <th>Full Path</th>
+                  <th style="width:100px; text-align:right;">Action</th>
+                </tr>
+              </thead>
+              <tbody id="workbooks-list">
+                <!-- Loaded dynamically -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Schedules View -->
+      <div id="view-schedules" class="view">
+        <div style="display:grid; grid-template-columns: 2.2fr 1fr; gap: 24px;">
+          <!-- Left: Schedules List -->
+          <div class="card">
+            <div class="card-title">Configured Schedules</div>
+            <div class="table-container">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Expression</th>
+                    <th>Job</th>
+                    <th>Configuration</th>
+                    <th>Schedule Runs</th>
+                    <th style="width: 60px;">State</th>
+                    <th style="text-align: right; width: 160px;">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="schedules-table-body">
+                  <tr><td colspan="7" style="text-align:center; padding: 20px; color:var(--text-muted);">Loading schedules...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          
+          <!-- Right: Add Schedule Form -->
+          <div class="card">
+            <div class="card-title">Add Schedule</div>
+            <form id="add-schedule-form" onsubmit="submitAddSchedule(event)">
+              <div class="form-group">
+                <label for="sch-name">Schedule Name</label>
+                <input type="text" id="sch-name" class="form-control" placeholder="e.g. daily-fintech" required>
+              </div>
+              <div class="form-group">
+                <label for="sch-expression">Recurrence Expression</label>
+                <input type="text" id="sch-expression" class="form-control" placeholder="e.g. 0 9 * * * or every 15m" required>
+                <small style="color:var(--text-muted); font-size:0.75rem; margin-top:4px; display:block;">
+                  Use 5-field cron or interval like <code>every 15m</code>, <code>every 2h</code>, <code>every 1d</code>.
+                </small>
+              </div>
+              <div class="form-group">
+                <label for="sch-job-type">Job Type</label>
+                <select id="sch-job-type" class="form-control" onchange="toggleJobTypeFields()" required>
+                  <option value="draft">Harvest & Generate (draft)</option>
+                  <option value="post">Confirm & Post (post)</option>
+                </select>
+              </div>
+              <div id="post-job-only-fields" style="display:none;">
+                <div class="form-group">
+                  <label for="sch-workbook">Workbook Path (Optional)</label>
+                  <input type="text" id="sch-workbook" class="form-control" placeholder="Defaults to active workbook">
+                </div>
+                <div class="form-group">
+                  <label for="sch-sheet">Sheet Name (Optional)</label>
+                  <input type="text" id="sch-sheet" class="form-control" placeholder="e.g. Payment (all if empty)">
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="sch-platforms">Platforms (Comma-separated, Optional)</label>
+                <input type="text" id="sch-platforms" class="form-control" placeholder="e.g. linkedin,facebook">
+              </div>
+              <div class="form-group">
+                <label for="sch-limit">Post Limit (Per Platform)</label>
+                <input type="number" id="sch-limit" class="form-control" value="2" min="1">
+              </div>
+              <button type="submit" class="btn btn-primary" style="width:100%; margin-top:10px;">Create Schedule</button>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <!-- Run History View -->
+      <div id="view-history" class="view">
+        <div class="card">
+          <div class="card-title">Run History Logs</div>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width: 40px; text-align:center;">Det</th>
+                  <th>Schedule Name / ID</th>
+                  <th>Trigger</th>
+                  <th>Status</th>
+                  <th>Started At</th>
+                  <th>Finished At</th>
+                  <th>Summary</th>
+                </tr>
+              </thead>
+              <tbody id="history-table-body">
+                <tr><td colspan="7" style="text-align:center; padding: 20px; color:var(--text-muted);">Loading history logs...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Posting Control Console Overlay Modal -->
+  <div class="modal-overlay" id="posting-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="spinner" id="posting-spinner"></div>
+        <span id="modal-title-text">Assisted Posting Active</span>
+      </div>
+      
+      <div class="modal-body">
+        <div class="card" style="background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.05); margin-bottom:16px;">
+          <div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:6px;">Target Post</div>
+          <div style="font-weight:600; font-size:1.05rem;" id="modal-post-title">Loading post details...</div>
+          <div style="display:flex; gap:16px; margin-top:10px; font-size:0.85rem;">
+            <div>Platform: <strong id="modal-platform" style="color:var(--accent-cyan)"></strong></div>
+            <div>Sheet: <strong id="modal-sheet"></strong></div>
+            <div>Row: <strong id="modal-row-idx"></strong></div>
+          </div>
+        </div>
+        
+        <div id="posting-step-desc" style="line-height:1.6; font-size:0.95rem;">
+          Initializing browser context... Please wait.
+        </div>
+        
+        <div id="posting-confirm-section" style="display:none; margin-top:20px;">
+          <div class="form-group">
+            <label for="post-confirm-url">Post URL (optional, leave empty to record [posted-no-link])</label>
+            <input type="text" id="post-confirm-url" class="form-control" placeholder="https://www.linkedin.com/feed/update/...">
+          </div>
+        </div>
+      </div>
+      
+      <div class="modal-actions">
+        <button class="btn" id="btn-post-skip" onclick="skipPostJob()" style="background:rgba(255, 23, 68, 0.1); border-color:var(--status-error); color:var(--status-error);">
+          Skip Platform
+        </button>
+        <button class="btn btn-primary" id="btn-post-confirm" onclick="confirmPostJob()" style="display:none;">
+          Confirm Posted
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toasts Container -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- JavaScript Interaction -->
+  <script>
+    let appConfig = {};
+    let sheetsData = [];
+    let currentSheetName = "";
+    let activeJobTimer = null;
+    let openRows = new Set(); // Track expanded rows
+
+    // Initialization
+    window.addEventListener('DOMContentLoaded', () => {
+      loadConfig();
+      loadWorkbooksList();
+      checkActivePostingJob();
+      switchView('dashboard');
+      
+      // Load standard sessions grid
+      renderSessionsGrid({
+        "linkedin": "login-required",
+        "facebook": "login-required",
+        "x": "login-required"
+      });
+    });
+
+    // View Routing
+    function switchView(viewName) {
+      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+      document.querySelectorAll('.menu-item').forEach(m => m.classList.remove('active'));
+      
+      const targetView = document.getElementById(`view-${viewName}`);
+      if (targetView) targetView.classList.add('active');
+      
+      // Highlight sidebar
+      const menuItems = document.querySelectorAll('.menu-item');
+      menuItems.forEach(item => {
+        if (item.getAttribute('onclick').includes(viewName)) {
+          item.classList.add('active');
+        }
+      });
+
+      document.getElementById('view-title').innerText = viewName.charAt(0).toUpperCase() + viewName.slice(1).replace('-', ' ');
+      
+      // Load view specifics
+      if (viewName === 'dashboard') {
+        loadWorkbookData();
+      } else if (viewName === 'sessions') {
+        checkSessions();
+      } else if (viewName === 'config') {
+        loadConfig();
+        loadWorkbooksList();
+      } else if (viewName === 'schedules') {
+        loadSchedules();
+      } else if (viewName === 'history') {
+        loadHistory();
+      }
+    }
+
+    function refreshCurrentView() {
+      const activeMenuItem = document.querySelector('.menu-item.active');
+      if (activeMenuItem) {
+        const match = activeMenuItem.getAttribute('onclick').match(/'([^']+)'/);
+        if (match) {
+          switchView(match[1]);
+        }
+      }
+    }
+
+    // Toast Utility
+    function showToast(message, type = 'success') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      toast.className = `toast toast-${type}`;
+      
+      let icon = '';
+      if (type === 'success') icon = '<svg style="width:18px;height:18px;stroke:var(--status-success)" viewBox="0 0 24 24" fill="none" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+      if (type === 'error') icon = '<svg style="width:18px;height:18px;stroke:var(--status-error)" viewBox="0 0 24 24" fill="none" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
+      if (type === 'warning') icon = '<svg style="width:18px;height:18px;stroke:var(--status-warning)" viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>';
+      
+      toast.innerHTML = `
+        ${icon}
+        <div class="toast-content">${message}</div>
+      `;
+      
+      container.appendChild(toast);
+      
+      // Auto-remove after 4 seconds
+      setTimeout(() => {
+        toast.style.animation = 'slideIn 0.3s ease reverse forwards';
+        setTimeout(() => toast.remove(), 300);
+      }, 4000);
+    }
+
+    // Config APIs
+    function loadConfig() {
+      fetch('/api/config')
+        .then(res => res.json())
+        .then(data => {
+          appConfig = data;
+          document.getElementById('active-workbook-label').innerText = data.excel_file;
+          
+          // Set in config page
+          if (document.getElementById('cfg-excel')) {
+            document.getElementById('cfg-excel').innerText = data.excel_file;
+            document.getElementById('cfg-output').innerText = data.output_dir;
+            document.getElementById('cfg-image').innerText = data.image_dir;
+            document.getElementById('cfg-post').innerText = data.post_dir;
+            document.getElementById('cfg-log').innerText = data.log_dir;
+          }
+        })
+        .catch(err => {
+          showToast('Failed to load system configuration', 'error');
+        });
+    }
+
+    function loadWorkbooksList() {
+      fetch('/api/workbooks')
+        .then(res => res.json())
+        .then(data => {
+          const tbody = document.getElementById('workbooks-list');
+          if (!tbody) return;
+          
+          tbody.innerHTML = '';
+          if (data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);">No Excel workbooks found.</td></tr>';
+            return;
+          }
+          
+          data.forEach(wb => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+              <td style="font-weight:600;">${wb.name}</td>
+              <td style="color:var(--text-muted);">${wb.folder}</td>
+              <td style="font-family:monospace;font-size:0.8rem;">${wb.path}</td>
+              <td style="text-align:right;">
+                <button class="btn btn-secondary" style="padding:4px 8px; font-size:0.8rem;" onclick="activateWorkbook('${wb.path}')">Select</button>
+              </td>
+            `;
+            tbody.appendChild(tr);
+          });
+        });
+    }
+
+    function activateWorkbook(path) {
+      fetch('/api/config/workbook', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.error) {
+          showToast(data.error, 'error');
+        } else {
+          showToast('Workbook updated successfully!');
+          loadConfig();
+          loadWorkbookData();
+        }
+      })
+      .catch(err => {
+        showToast('Error changing workbook', 'error');
+      });
+    }
+
+    function setWorkbookPath() {
+      const path = document.getElementById('wb-custom-path').value.trim();
+      if (!path) {
+        showToast('Please enter a valid path', 'warning');
+        return;
+      }
+      activateWorkbook(path);
+    }
+
+    // Ingest and Render Workbook Data
+    function loadWorkbookData() {
+      const tbody = document.getElementById('workbook-table-body');
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding: 40px; color:var(--text-muted);"><div class="spinner" style="vertical-align:middle;margin-right:10px;"></div>Ingesting Excel sheets...</td></tr>';
+      
+      fetch('/api/workbook/inspect')
+        .then(res => {
+          if (!res.ok) {
+            return res.json().then(d => { throw new Error(d.error || 'Failed to inspect workbook') });
+          }
+          return res.json();
+        })
+        .then(data => {
+          sheetsData = data.sheets;
+          
+          const warningContainer = document.getElementById('dashboard-warnings');
+          if (data.warnings && data.warnings.length > 0) {
+            warningContainer.innerText = `${data.warnings.length} Ingest Warnings`;
+            warningContainer.title = data.warnings.join('\n');
+          } else {
+            warningContainer.innerText = '';
+          }
+
+          // Build tabs
+          const tabsContainer = document.getElementById('sheet-tabs');
+          tabsContainer.innerHTML = '';
+          
+          if (sheetsData.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding: 40px; color:var(--text-muted);">No sheets found in business workbook.</td></tr>';
+            return;
+          }
+
+          sheetsData.forEach((sheet, idx) => {
+            const tab = document.createElement('div');
+            tab.className = `tab ${idx === 0 || sheet.name === currentSheetName ? 'active' : ''}`;
+            tab.innerText = sheet.name;
+            tab.onclick = () => selectSheet(sheet.name);
+            tabsContainer.appendChild(tab);
+            
+            if (idx === 0 && !currentSheetName) {
+              currentSheetName = sheet.name;
+            }
+          });
+          
+          renderSheetRows(currentSheetName);
+        })
+        .catch(err => {
+          tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding: 40px; color:var(--status-error); font-weight:500;">${err.message}</td></tr>`;
+          showToast(err.message, 'error');
+        });
+    }
+
+    function selectSheet(name) {
+      currentSheetName = name;
+      document.querySelectorAll('.tab').forEach(t => {
+        t.classList.toggle('active', t.innerText === name);
+      });
+      renderSheetRows(name);
+    }
+
+    function renderSheetRows(sheetName) {
+      const tbody = document.getElementById('workbook-table-body');
+      tbody.innerHTML = '';
+      
+      const sheet = sheetsData.find(s => s.name === sheetName);
+      if (!sheet || sheet.rows.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding: 20px; color:var(--text-muted);">No rows in this sheet.</td></tr>';
+        return;
+      }
+      
+      sheet.rows.forEach(row => {
+        const isExpanded = openRows.has(`${sheetName}-${row.row_idx}`);
+        
+        // Row Status Badge for Excel Row status
+        let postStatusSummary = renderStatusSummary(row.link_post_raw);
+        
+        const tr = document.createElement('tr');
+        tr.className = 'workbook-row';
+        tr.id = `row-${row.row_idx}`;
+        tr.style.cursor = 'pointer';
+        tr.onclick = (e) => {
+          // Ignore clicks on buttons/actions
+          if (e.target.closest('button') || e.target.closest('.actions')) return;
+          toggleExpandRow(sheetName, row);
+        };
+        
+        tr.innerHTML = `
+          <td><strong>${row.id}</strong></td>
+          <td style="font-weight:500; font-size:0.95rem;">${row.title}</td>
+          <td><span style="font-family:monospace; font-size:0.75rem; color:var(--accent-cyan); word-break:break-all;">${row.image_link || 'None'}</span></td>
+          <td>${postStatusSummary}</td>
+          <td style="text-align:right;" class="actions">
+            <button class="btn btn-secondary" style="padding: 6px 12px; font-size:0.8rem;" onclick="triggerPostDropdown('${sheetName}', ${row.id}, this)">Post</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+        
+        // Render details row if expanded
+        if (isExpanded) {
+          const detailTr = document.createElement('tr');
+          detailTr.className = 'expanded-row-details';
+          detailTr.innerHTML = `
+            <td colspan="5">
+              <div class="expanded-content">
+                <div>
+                  <h4 style="margin-bottom:12px; font-size:0.85rem; text-transform:uppercase; color:var(--text-muted);">Generated Post Drafts</h4>
+                  <div class="drafts-grid">
+                    ${renderDraftsPreview(row)}
+                  </div>
+                </div>
+                <div>
+                  <h4 style="margin-bottom:12px; font-size:0.85rem; text-transform:uppercase; color:var(--text-muted);">Row Ingestion Data</h4>
+                  <div style="font-size:0.8rem; line-height:1.6; background:rgba(0,0,0,0.1); padding:16px; border-radius:8px; border:1px solid var(--border-color)">
+                    <div><strong>Row Number:</strong> Excel index ${row.row_idx}</div>
+                    <div style="margin-top:6px;"><strong>Raw Link Post Text:</strong></div>
+                    <pre style="font-family:monospace; background:rgba(0,0,0,0.2); padding:8px; border-radius:4px; margin-top:4px; font-size:0.75rem; white-space:pre-wrap;">${row.link_post_raw || 'None'}</pre>
+                  </div>
+                </div>
+              </div>
+            </td>
+          `;
+          tbody.appendChild(detailTr);
+        }
+      });
+    }
+
+    function toggleExpandRow(sheetName, row) {
+      const key = `${sheetName}-${row.row_idx}`;
+      if (openRows.has(key)) {
+        openRows.delete(key);
+      } else {
+        openRows.add(key);
+      }
+      renderSheetRows(sheetName);
+    }
+
+    function renderStatusSummary(rawLinkPost) {
+      if (!rawLinkPost) return '<span class="badge badge-muted">Not Posted</span>';
+      
+      const lines = rawLinkPost.split('\n').map(l => l.trim()).filter(l => l.includes(':'));
+      if (lines.length === 0) return '<span class="badge badge-muted">Not Posted</span>';
+      
+      let badges = '';
+      lines.forEach(line => {
+        const [plat, val] = line.split(':', 2);
+        const platform = plat.trim();
+        const value = val.trim();
+        
+        let type = 'muted';
+        if (value.startsWith('http')) type = 'success';
+        else if (value.includes('[posted-no-link]')) type = 'success';
+        else if (value.includes('[skip]')) type = 'warning';
+        else if (value.includes('[pending]')) type = 'pending';
+        else if (value.includes('[error]')) type = 'error';
+        else if (value.includes('[login-required]')) type = 'error';
+        
+        badges += `<span class="badge badge-${type}" style="margin-right:4px; margin-bottom:4px;" title="${line}">${platform}</span>`;
+      });
+      
+      return badges;
+    }
+
+    function renderDraftsPreview(row) {
+      const platforms = [
+        { key: 'linkedin_draft', label: 'LinkedIn' },
+        { key: 'facebook_draft', label: 'Facebook' },
+        { key: 'x_draft', label: 'X (Twitter)' },
+        { key: 'instagram_draft', label: 'Instagram' },
+        { key: 'pinterest_draft', label: 'Pinterest' },
+        { key: 'threads_draft', label: 'Threads' },
+        { key: 'tiktok_draft', label: 'TikTok' },
+        { key: 'youtube_draft', label: 'YouTube' }
+      ];
+      
+      let html = '';
+      platforms.forEach(p => {
+        const content = row[p.key];
+        if (content) {
+          html += `
+            <div class="draft-item">
+              <div class="draft-header">
+                <span>${p.label}</span>
+                <span class="badge badge-info" style="font-size:0.65rem; padding: 2px 6px;">Draft exists</span>
+              </div>
+              <div class="draft-body">${escapeHtml(content)}</div>
+            </div>
+          `;
+        }
+      });
+      
+      if (!html) {
+        return '<div style="color:var(--text-muted); font-size:0.85rem; padding:10px;">No drafts generated for this row. Run generate first.</div>';
+      }
+      return html;
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.innerText = text;
+      return div.innerHTML;
+    }
+
+    // Trigger Posting
+    function triggerPostDropdown(sheetName, rowId, btn) {
+      // Find row
+      const sheet = sheetsData.find(s => s.name === sheetName);
+      const row = sheet.rows.find(r => r.id === rowId);
+      
+      // Get platforms that have drafts
+      const platforms = [
+        { key: 'linkedin_draft', id: 'linkedin', label: 'LinkedIn' },
+        { key: 'facebook_draft', id: 'facebook', label: 'Facebook' },
+        { key: 'x_draft', id: 'x', label: 'X (Twitter)' },
+        { key: 'instagram_draft', id: 'instagram', label: 'Instagram' },
+        { key: 'pinterest_draft', id: 'pinterest', label: 'Pinterest' },
+        { key: 'threads_draft', id: 'threads', label: 'Threads' },
+        { key: 'tiktok_draft', id: 'tiktok', label: 'TikTok' },
+        { key: 'youtube_draft', id: 'youtube', label: 'YouTube' }
+      ];
+      
+      const availablePlats = platforms.filter(p => !!row[p.key]);
+      
+      if (availablePlats.length === 0) {
+        showToast('No drafts available to post on this row. Please run generate first.', 'warning');
+        return;
+      }
+      
+      // If only one platform, trigger directly, else prompt
+      if (availablePlats.length === 1) {
+        triggerPosting(availablePlats[0].id, rowId, sheetName);
+      } else {
+        // Build simple quick dropdown prompt
+        const selectHTML = availablePlats.map(p => `<option value="${p.id}">${p.label}</option>`).join('');
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+        overlay.style.display = 'flex';
+        overlay.id = 'temp-select-modal';
+        
+        overlay.innerHTML = `
+          <div class="modal-card" style="width: 380px;">
+            <div class="modal-title" style="font-weight:700; font-size:1.1rem; margin-bottom:16px;">Select Platform to Post</div>
+            <div class="form-group">
+              <select id="temp-select-plat" class="form-control">
+                ${selectHTML}
+              </select>
+            </div>
+            <div class="modal-actions" style="margin-top:20px;">
+              <button class="btn" onclick="document.getElementById('temp-select-modal').remove()">Cancel</button>
+              <button class="btn btn-primary" onclick="confirmTempSelect(${rowId}, '${sheetName}')">Launch Post</button>
+            </div>
+          </div>
+        `;
+        document.body.appendChild(overlay);
+      }
+    }
+
+    function confirmTempSelect(rowId, sheetName) {
+      const select = document.getElementById('temp-select-plat');
+      const platform = select.value;
+      document.getElementById('temp-select-modal').remove();
+      triggerPosting(platform, rowId, sheetName);
+    }
+
+    function triggerPosting(platform, rowId, sheetName) {
+      showToast(`Launching browser automation for ${platform}...`);
+      
+      fetch('/api/post', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ platform, row_id: rowId, sheet_name: sheetName })
+      })
+      .then(res => {
+        if (!res.ok) {
+          return res.json().then(d => { throw new Error(d.error) });
+        }
+        return res.json();
+      })
+      .then(data => {
+        showToast('Posting browser launched!');
+        openPostingModal(data.job);
+        pollActivePostingJob();
+      })
+      .catch(err => {
+        showToast(err.message, 'error');
+      });
+    }
+
+    // Active posting job modal control
+    function openPostingModal(job) {
+      const modal = document.getElementById('posting-modal');
+      modal.style.display = 'flex';
+      
+      document.getElementById('modal-post-title').innerText = job.title;
+      document.getElementById('modal-platform').innerText = job.platform.toUpperCase();
+      document.getElementById('modal-sheet').innerText = job.sheet_name;
+      document.getElementById('modal-row-idx').innerText = job.row_id;
+      
+      updatePostingModalState(job);
+    }
+
+    function updatePostingModalState(job) {
+      const stepDesc = document.getElementById('posting-step-desc');
+      const confirmSection = document.getElementById('posting-confirm-section');
+      const btnConfirm = document.getElementById('btn-post-confirm');
+      const btnSkip = document.getElementById('btn-post-skip');
+      const spinner = document.getElementById('posting-spinner');
+      const titleText = document.getElementById('modal-title-text');
+      
+      if (job.status === 'preparing') {
+        spinner.className = 'spinner';
+        titleText.innerText = 'Assisted Posting Active';
+        stepDesc.innerHTML = `<div style="text-align:center;padding:20px;">
+          <div class="spinner" style="margin-bottom:10px;"></div>
+          <div>Launching browser and preparing content. Please wait...</div>
+        </div>`;
+        confirmSection.style.display = 'none';
+        btnConfirm.style.display = 'none';
+        btnSkip.style.display = 'inline-block';
+      } 
+      else if (job.status === 'pending-operator') {
+        spinner.className = ''; // stop spin
+        titleText.innerText = 'Operator Review Required';
+        stepDesc.innerHTML = `
+          <div style="background:rgba(0, 230, 118, 0.05); border:1px solid var(--status-success); padding:16px; border-radius:8px; margin-bottom:14px; font-weight:500;">
+            [READY] Post drafts have been generated and prepared in the browser.
+          </div>
+          <p>Please review the headed Chromium browser window that popped up on your computer:</p>
+          <ul style="margin-left:20px; margin-top:8px; margin-bottom:8px; line-height:1.6;">
+            <li>Draft text has been auto-filled.</li>
+            <li>Card screenshot has been uploaded (if exists).</li>
+            <li>Make any manual adjustments in the composer as needed.</li>
+            <li>Click <strong>Post</strong> in the social media composer to publish it.</li>
+          </ul>
+          <p style="margin-top:10px; font-weight:600; color:var(--accent-cyan)">After publishing, enter the post URL below and click "Confirm Posted".</p>
+        `;
+        confirmSection.style.display = 'block';
+        btnConfirm.style.display = 'inline-block';
+        btnSkip.style.display = 'inline-block';
+      }
+      else if (job.status === 'success') {
+        spinner.className = '';
+        titleText.innerText = 'Posting Success';
+        stepDesc.innerHTML = `<div style="text-align:center; padding:20px; color:var(--status-success)">
+          <svg style="width:48px;height:48px;margin-bottom:10px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          <div style="font-size:1.1rem; font-weight:600;">Post Successfully Confirmed!</div>
+          <div style="font-size:0.85rem; color:var(--text-muted); margin-top:6px; word-break:break-all;">URL: ${job.post_url}</div>
+        </div>`;
+        confirmSection.style.display = 'none';
+        btnConfirm.style.display = 'none';
+        btnSkip.innerText = 'Close';
+        btnSkip.style.background = 'var(--bg-tertiary)';
+        btnSkip.style.borderColor = 'var(--border-color)';
+        btnSkip.style.color = '#fff';
+      }
+      else if (job.status === 'skipped') {
+        spinner.className = '';
+        titleText.innerText = 'Posting Skipped';
+        stepDesc.innerHTML = `<div style="text-align:center; padding:20px; color:var(--status-warning)">
+          <svg style="width:48px;height:48px;margin-bottom:10px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path></svg>
+          <div style="font-size:1.1rem; font-weight:600;">Post marked as Skipped!</div>
+        </div>`;
+        confirmSection.style.display = 'none';
+        btnConfirm.style.display = 'none';
+        btnSkip.innerText = 'Close';
+        btnSkip.style.background = 'var(--bg-tertiary)';
+        btnSkip.style.borderColor = 'var(--border-color)';
+        btnSkip.style.color = '#fff';
+      }
+      else if (job.status === 'error') {
+        spinner.className = '';
+        titleText.innerText = 'Posting Error';
+        stepDesc.innerHTML = `<div style="text-align:center; padding:20px; color:var(--status-error)">
+          <svg style="width:48px;height:48px;margin-bottom:10px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+          <div style="font-size:1.1rem; font-weight:600;">Posting Job Failed!</div>
+          <div style="font-size:0.85rem; color:var(--text-muted); margin-top:6px;">${job.error_message || 'Unknown error occurred'}</div>
+        </div>`;
+        confirmSection.style.display = 'none';
+        btnConfirm.style.display = 'none';
+        btnSkip.innerText = 'Close';
+        btnSkip.style.background = 'var(--bg-tertiary)';
+        btnSkip.style.borderColor = 'var(--border-color)';
+        btnSkip.style.color = '#fff';
+      }
+    }
+
+    function checkActivePostingJob() {
+      fetch('/api/post/status')
+        .then(res => res.json())
+        .then(data => {
+          if (data.active) {
+            openPostingModal(data.job);
+            pollActivePostingJob();
+          }
+        });
+    }
+
+    function pollActivePostingJob() {
+      if (activeJobTimer) clearInterval(activeJobTimer);
+      
+      activeJobTimer = setInterval(() => {
+        fetch('/api/post/status')
+          .then(res => res.json())
+          .then(data => {
+            if (!data.active) {
+              clearInterval(activeJobTimer);
+              return;
+            }
+            updatePostingModalState(data.job);
+            
+            // If completed, reload sheet rows
+            if (['success', 'skipped', 'error'].includes(data.job.status)) {
+              clearInterval(activeJobTimer);
+              loadWorkbookData();
+            }
+          })
+          .catch(err => {
+            clearInterval(activeJobTimer);
+          });
+      }, 1000);
+    }
+
+    function confirmPostJob() {
+      const url = document.getElementById('post-confirm-url').value.trim();
+      
+      fetch('/api/post/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.error) showToast(data.error, 'error');
+        else showToast('Post URL submitted!');
+      });
+    }
+
+    function skipPostJob() {
+      const closeBtnText = document.getElementById('btn-post-skip').innerText;
+      if (closeBtnText === 'Close') {
+        document.getElementById('posting-modal').style.display = 'none';
+        // Reset button
+        const btnSkip = document.getElementById('btn-post-skip');
+        btnSkip.innerText = 'Skip Platform';
+        btnSkip.style.background = 'rgba(255, 23, 68, 0.1)';
+        btnSkip.style.borderColor = 'var(--status-error)';
+        btnSkip.style.color = 'var(--status-error)';
+        return;
+      }
+
+      fetch('/api/post/skip', { method: 'POST' })
+        .then(res => res.json())
+        .then(data => {
+          if (data.error) showToast(data.error, 'error');
+          else showToast('Platform post skipped!');
+        });
+    }
+
+    // Sessions verification
+    function checkSessions() {
+      const container = document.getElementById('sessions-container');
+      container.innerHTML = '<div style="grid-column: 1/-1; text-align:center; padding: 40px; color:var(--text-muted);"><div class="spinner" style="margin-bottom:10px;"></div>Checking local sessions. This launches headless Chrome instances, please wait...</div>';
+      
+      fetch('/api/sessions')
+        .then(res => res.json())
+        .then(data => {
+          renderSessionsGrid(data);
+          showToast('Sessions checked successfully!');
+        })
+        .catch(err => {
+          container.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--status-error);">Failed to verify sessions.</div>';
+          showToast('Failed to verify sessions', 'error');
+        });
+    }
+
+    function renderSessionsGrid(data) {
+      const container = document.getElementById('sessions-container');
+      container.innerHTML = '';
+      
+      const platforms = [
+        { id: 'linkedin', label: 'LinkedIn' },
+        { id: 'facebook', label: 'Facebook' },
+        { id: 'x', label: 'X (Twitter)' },
+        { id: 'instagram', label: 'Instagram' },
+        { id: 'pinterest', label: 'Pinterest' },
+        { id: 'threads', label: 'Threads' },
+        { id: 'tiktok', label: 'TikTok' },
+        { id: 'youtube', label: 'YouTube' }
+      ];
+      
+      platforms.forEach(p => {
+        const status = data[p.id] || 'unknown';
+        let badgeClass = 'badge-muted';
+        let statusText = 'Not Checked';
+        
+        if (status === 'logged-in') {
+          badgeClass = 'badge-success';
+          statusText = 'Logged In';
+        } else if (status === 'login-required') {
+          badgeClass = 'badge-error';
+          statusText = 'Login Required';
+        } else if (status === 'error') {
+          badgeClass = 'badge-error';
+          statusText = 'Check Failed';
+        } else if (status === 'unsupported') {
+          badgeClass = 'badge-muted';
+          statusText = 'Not Supported';
+        }
+        
+        const card = document.createElement('div');
+        card.className = 'session-card';
+        card.innerHTML = `
+          <div class="session-icon">${p.label.charAt(0)}</div>
+          <div class="session-info">
+            <div class="session-name">${p.label}</div>
+            <span class="badge ${badgeClass}">${statusText}</span>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    // Posting Plan (dry-run)
+    function generatePlan() {
+      const limit = document.getElementById('planner-limit').value;
+      const platforms = document.getElementById('planner-platforms').value;
+      
+      const planContainer = document.getElementById('plan-candidates-container');
+      const skippedContainer = document.getElementById('plan-skipped-list');
+      const resultsDiv = document.getElementById('plan-results');
+      
+      planContainer.innerHTML = '<div style="text-align:center; padding:20px;"><div class="spinner"></div> Planning...</div>';
+      resultsDiv.style.display = 'block';
+      
+      fetch(`/api/plan?limit=${limit}&platforms=${encodeURIComponent(platforms)}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.error) {
+            planContainer.innerHTML = `<div style="color:var(--status-error);">${data.error}</div>`;
+            return;
+          }
+          
+          planContainer.innerHTML = '';
+          skippedContainer.innerHTML = '';
+          
+          // Render candidates
+          const candidates = data.candidates || {};
+          let hasCandidates = false;
+          
+          Object.keys(candidates).forEach(plat => {
+            const list = candidates[plat] || [];
+            if (list.length > 0) hasCandidates = true;
+            
+            const pCard = document.createElement('div');
+            pCard.className = 'planner-platform-card';
+            
+            let itemsHTML = '';
+            list.forEach((c, idx) => {
+              itemsHTML += `
+                <div style="padding:12px 16px; border-bottom: 1px solid rgba(255,255,255,0.03); display:flex; justify-content:space-between; align-items:center;">
+                  <div>
+                    <div style="font-weight:600;font-size:0.9rem;">${idx + 1}. ${c.title}</div>
+                    <div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">Sheet: ${c.sheet_name} | Row Index: ${c.row_idx} | ID: ${c.id}</div>
+                  </div>
+                  <button class="btn btn-secondary" style="padding:4px 10px; font-size:0.75rem;" onclick="switchView('dashboard'); setTimeout(() => selectSheet('${c.sheet_name}'), 100);">Go to Row</button>
+                </div>
+              `;
+            });
+            
+            pCard.innerHTML = `
+              <div class="planner-platform-header">
+                <span>${plat.toUpperCase()}</span>
+                <span class="badge ${list.length > 0 ? 'badge-success' : 'badge-muted'}">${list.length} eligible</span>
+              </div>
+              <div class="planner-platform-body">
+                ${list.length === 0 ? '<div style="padding:16px; color:var(--text-muted); font-size:0.85rem;">No eligible rows.</div>' : itemsHTML}
+              </div>
+            `;
+            planContainer.appendChild(pCard);
+          });
+          
+          if (!hasCandidates) {
+            planContainer.innerHTML = '<div style="text-align:center; padding: 20px; color:var(--text-muted);">No candidates are eligible on any checked platform.</div>';
+          }
+          
+          // Render skipped summary
+          const skipped = data.skipped_summary || [];
+          if (skipped.length === 0) {
+            skippedContainer.innerHTML = '<li>No rows skipped.</li>';
+          } else {
+            skipped.forEach(s => {
+              const li = document.createElement('li');
+              li.innerText = s;
+              skippedContainer.appendChild(li);
+            });
+          }
+          
+          showToast('Posting plan generated!');
+        })
+        .catch(err => {
+          planContainer.innerHTML = '<div style="color:var(--status-error);">Error building plan.</div>';
+          showToast('Failed to build posting plan', 'error');
+        });
+    }
+
+    // Manual Writeback submit
+    function submitWriteback(event) {
+      event.preventDefault();
+      
+      const sheet = document.getElementById('wb-sheet').value.trim();
+      const row = document.getElementById('wb-row').value;
+      const platform = document.getElementById('wb-platform').value;
+      const status = document.getElementById('wb-status').value.trim();
+      
+      fetch('/api/write-result', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sheet, row, platform, status })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.error) {
+          showToast(data.error, 'error');
+        } else {
+          showToast('Posting result written to workbook successfully!');
+          document.getElementById('writeback-form').reset();
+          loadWorkbookData();
+        }
+      })
+      .catch(err => {
+        showToast('Error writing result', 'error');
+      });
+    }
+
+    // --- Local Scheduling and Run History ---
+
+    function toggleJobTypeFields() {
+      const jobType = document.getElementById('sch-job-type').value;
+      const postFields = document.getElementById('post-job-only-fields');
+      postFields.style.display = jobType === 'post' ? 'block' : 'none';
+    }
+
+    function formatDateTime(isoString) {
+      if (!isoString) return '-';
+      try {
+        const d = new Date(isoString);
+        if (isNaN(d.getTime())) return isoString;
+        return d.toLocaleString();
+      } catch (e) {
+        return isoString;
+      }
+    }
+
+    function loadSchedules() {
+      const tbody = document.getElementById('schedules-table-body');
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding: 20px; color:var(--text-muted);"><div class="spinner"></div> Loading schedules...</td></tr>';
+      
+      fetch('/api/schedules')
+        .then(res => res.json())
+        .then(data => {
+          tbody.innerHTML = '';
+          if (data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding: 20px; color:var(--text-muted);">No schedules defined. Add one using the form.</td></tr>';
+            return;
+          }
+          
+          data.forEach(s => {
+            const tr = document.createElement('tr');
+            
+            // Format details
+            let details = '';
+            if (s.job_type === 'post') {
+              const sheetText = s.sheet_name ? `Sheet: ${s.sheet_name}` : 'All Sheets';
+              const limitText = `Limit: ${s.post_limit}`;
+              details = `${sheetText}, ${limitText}`;
+            } else {
+              details = `Limit: ${s.post_limit}`;
+            }
+            if (s.platforms) {
+              details += ` (${s.platforms})`;
+            }
+            
+            tr.innerHTML = `
+              <td style="font-weight:600;">${escapeHtml(s.name)}</td>
+              <td style="font-family:monospace; font-size:0.85rem; color:var(--accent-cyan);">${escapeHtml(s.expression)}</td>
+              <td><span class="badge ${s.job_type === 'post' ? 'badge-info' : 'badge-pending'}">${s.job_type}</span></td>
+              <td style="font-size:0.8rem; color:var(--text-muted);">${escapeHtml(details)}</td>
+              <td style="font-size:0.8rem; line-height:1.4;">
+                <div>Last: ${formatDateTime(s.last_run_at)}</div>
+                <div style="color:var(--accent-cyan);">Next: ${formatDateTime(s.next_run_at)}</div>
+              </td>
+              <td>
+                <label class="switch">
+                  <input type="checkbox" ${s.enabled === 1 ? 'checked' : ''} onchange="toggleScheduleActive(${s.id})">
+                  <span class="slider"></span>
+                </label>
+              </td>
+              <td style="text-align:right;">
+                <button class="btn btn-secondary" style="padding:4px 8px; font-size:0.8rem; display:inline-block; margin-right:4px;" onclick="runScheduleNow(${s.id}, '${escapeHtml(s.name)}')">Run Now</button>
+                <button class="btn" style="padding:4px 8px; font-size:0.8rem; border-color:var(--status-error); color:var(--status-error); background:rgba(255, 23, 68, 0.05); display:inline-block;" onclick="deleteSchedule(${s.id})">Delete</button>
+              </td>
+            `;
+            tbody.appendChild(tr);
+          });
+        })
+        .catch(err => {
+          tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding: 20px; color:var(--status-error); font-weight:500;">Failed to load schedules: ${err.message}</td></tr>`;
+        });
+    }
+
+    function toggleScheduleActive(id) {
+      fetch(`/api/schedules/${id}/toggle`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.error) {
+          showToast(data.error, 'error');
+        } else {
+          showToast(data.message);
+          loadSchedules();
+        }
+      })
+      .catch(err => {
+        showToast('Failed to toggle schedule', 'error');
+      });
+    }
+
+    function runScheduleNow(id, name) {
+      showToast(`Starting run for '${name}'...`);
+      fetch(`/api/schedules/${id}/run`, {
+        method: 'POST'
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.error) {
+          showToast(data.error, 'error');
+        } else {
+          showToast('Run started in background. Check Run History!');
+          checkActivePostingJob();
+        }
+      })
+      .catch(err => {
+        showToast('Failed to start run', 'error');
+      });
+    }
+
+    function deleteSchedule(id) {
+      if (!confirm('Are you sure you want to delete this schedule?')) return;
+      fetch(`/api/schedules/${id}`, {
+        method: 'DELETE'
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.error) {
+          showToast(data.error, 'error');
+        } else {
+          showToast('Schedule deleted successfully');
+          loadSchedules();
+        }
+      })
+      .catch(err => {
+        showToast('Failed to delete schedule', 'error');
+      });
+    }
+
+    function submitAddSchedule(event) {
+      event.preventDefault();
+      const name = document.getElementById('sch-name').value.trim();
+      const expression = document.getElementById('sch-expression').value.trim();
+      const job_type = document.getElementById('sch-job-type').value;
+      const workbook_path = document.getElementById('sch-workbook') ? document.getElementById('sch-workbook').value.trim() : null;
+      const sheet_name = document.getElementById('sch-sheet') ? document.getElementById('sch-sheet').value.trim() : null;
+      const platforms = document.getElementById('sch-platforms').value.trim() || null;
+      const post_limit = parseInt(document.getElementById('sch-limit').value) || 2;
+      
+      fetch('/api/schedules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name, expression, job_type, workbook_path: workbook_path || null, sheet_name: sheet_name || null, platforms, post_limit
+        })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.error) {
+          showToast(data.error, 'error');
+        } else {
+          showToast('Schedule created successfully!');
+          document.getElementById('add-schedule-form').reset();
+          toggleJobTypeFields();
+          loadSchedules();
+        }
+      })
+      .catch(err => {
+        showToast('Failed to create schedule', 'error');
+      });
+    }
+
+    let historyLogs = [];
+    let openHistoryRows = new Set();
+
+    function loadHistory() {
+      const tbody = document.getElementById('history-table-body');
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding: 20px; color:var(--text-muted);"><div class="spinner"></div> Loading history...</td></tr>';
+      
+      fetch('/api/history')
+        .then(res => res.json())
+        .then(data => {
+          historyLogs = data;
+          renderHistoryTable();
+        })
+        .catch(err => {
+          tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding: 20px; color:var(--status-error); font-weight:500;">Failed to load history: ${err.message}</td></tr>`;
+        });
+    }
+
+    function renderHistoryTable() {
+      const tbody = document.getElementById('history-table-body');
+      tbody.innerHTML = '';
+      
+      if (historyLogs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding: 20px; color:var(--text-muted);">No execution runs logged yet.</td></tr>';
+        return;
+      }
+      
+      historyLogs.forEach(r => {
+        const isExpanded = openHistoryRows.has(r.run_id);
+        const tr = document.createElement('tr');
+        tr.style.cursor = 'pointer';
+        tr.onclick = (e) => {
+          if (e.target.closest('button')) return;
+          toggleExpandHistoryRow(r.run_id);
+        };
+        
+        let statusClass = 'badge-muted';
+        if (r.status === 'completed') statusClass = 'badge-success';
+        else if (r.status === 'partial') statusClass = 'badge-warning';
+        else if (r.status === 'failed') statusClass = 'badge-error';
+        else if (r.status === 'missed') statusClass = 'badge-muted';
+        else if (r.status === 'running') statusClass = 'badge-pending';
+        
+        const triggerClass = r.trigger_type === 'scheduled' ? 'badge-info' : 'badge-pending';
+        const expandIcon = isExpanded ? '▼' : '▶';
+        
+        tr.innerHTML = `
+          <td style="color:var(--accent-cyan); font-weight:bold; font-size:0.8rem; text-align:center;">${expandIcon}</td>
+          <td>
+            <div style="font-weight:600;">${escapeHtml(r.schedule_name || 'Manual / Instant')}</div>
+            <div style="font-size:0.75rem; color:var(--text-muted); font-family:monospace;">ID: ${r.run_id.substring(0, 8)}...</div>
+          </td>
+          <td><span class="badge ${triggerClass}">${r.trigger_type}</span></td>
+          <td><span class="badge ${statusClass}">${r.status}</span></td>
+          <td style="font-size:0.8rem;">${formatDateTime(r.started_at)}</td>
+          <td style="font-size:0.8rem;">${formatDateTime(r.finished_at)}</td>
+          <td style="font-size:0.8rem; max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(r.summary || r.error_message || '')}">
+            ${escapeHtml(r.summary || r.error_message || '-')}
+          </td>
+        `;
+        tbody.appendChild(tr);
+        
+        if (isExpanded) {
+          const detailTr = document.createElement('tr');
+          detailTr.className = 'expanded-row-details';
+          const detailsTbodyId = `details-tbody-${r.run_id}`;
+          
+          detailTr.innerHTML = `
+            <td colspan="7">
+              <div class="expanded-content" style="display:block; padding:16px 24px;">
+                <h4 style="margin-bottom:12px; font-size:0.85rem; text-transform:uppercase; color:var(--accent-cyan);">Execution Outcomes</h4>
+                <div class="table-container" style="max-height: 300px; overflow-y: auto;">
+                  <table style="font-size:0.8rem; width:100%;">
+                    <thead>
+                      <tr style="background: rgba(255,255,255,0.02)">
+                        <th>Sheet</th>
+                        <th>Row ID</th>
+                        <th>Platform</th>
+                        <th>Status</th>
+                        <th>Outcome Description</th>
+                      </tr>
+                    </thead>
+                    <tbody id="${detailsTbodyId}">
+                      <!-- Loaded via fetch -->
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </td>
+          `;
+          tbody.appendChild(detailTr);
+          
+          // Populate details
+          fetchAndRenderHistoryDetail(r.run_id, document.getElementById(detailsTbodyId));
+        }
+      });
+    }
+
+    function toggleExpandHistoryRow(runId) {
+      if (openHistoryRows.has(runId)) {
+        openHistoryRows.delete(runId);
+      } else {
+        openHistoryRows.add(runId);
+      }
+      renderHistoryTable();
+    }
+
+    function fetchAndRenderHistoryDetail(runId, tbody) {
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;"><div class="spinner"></div> Loading details...</td></tr>';
+      fetch(`/api/history/${runId}`)
+        .then(res => res.json())
+        .then(data => {
+          tbody.innerHTML = '';
+          const details = data.details || [];
+          if (details.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);">No detailed outcomes logged.</td></tr>';
+            return;
+          }
+          details.forEach(d => {
+            let type = 'muted';
+            if (d.status === 'success') type = 'success';
+            else if (d.status === 'skip') type = 'warning';
+            else if (d.status === 'error') type = 'error';
+            else if (d.status === 'login-required') type = 'error';
+            else if (d.status === 'warning') type = 'warning';
+            
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+              <td><strong>${escapeHtml(d.sheet_name)}</strong></td>
+              <td>${d.row_id || '-'}</td>
+              <td><span style="color:var(--accent-cyan)">${escapeHtml(d.platform)}</span></td>
+              <td><span class="badge badge-${type}">${escapeHtml(d.status)}</span></td>
+              <td style="word-break:break-all; font-family:monospace; font-size:0.75rem;">${escapeHtml(d.message || '')}</td>
+            `;
+            tbody.appendChild(tr);
+          });
+        })
+        .catch(err => {
+          tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--status-error);">Failed to load details: ${err.message}</td></tr>`;
+        });
+    }
+  </script>
+</body>
+</html>

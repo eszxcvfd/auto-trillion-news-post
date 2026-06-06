@@ -796,6 +796,48 @@ def main():
     write_parser.add_argument("--workbook", default=None, help="Path to the business workbook file")
     write_parser.add_argument("--no-backup", action="store_true", help="Disable timestamped workbook backup before write")
 
+    # web command
+    web_parser = subparsers.add_parser("web", help="Start the local Web UI operator surface")
+    web_parser.add_argument("--port", type=int, default=8080, help="Port to run local web server on (default: 8080)")
+
+    # schedule command
+    schedule_parser = subparsers.add_parser("schedule", help="Manage local schedules and run history")
+    schedule_subparsers = schedule_parser.add_subparsers(dest="schedule_command", help="Schedule subcommands")
+    
+    # schedule add
+    add_parser = schedule_subparsers.add_parser("add", help="Add a new schedule")
+    add_parser.add_argument("--name", required=True, help="Name of the schedule")
+    add_parser.add_argument("--expression", required=True, help="Cron expression or interval (e.g. '*/15 * * * *' or 'every 1h')")
+    add_parser.add_argument("--job-type", required=True, choices=["draft", "post"], help="Type of job (draft = harvest & generate, post = publishing)")
+    add_parser.add_argument("--workbook", default=None, help="Custom workbook file path")
+    add_parser.add_argument("--sheet", default=None, help="Specific sheet name to post from")
+    add_parser.add_argument("--platforms", default=None, help="Comma-separated platforms to post")
+    add_parser.add_argument("--limit", type=int, default=2, help="Posting limit per platform")
+    
+    # schedule list
+    schedule_subparsers.add_parser("list", help="List all schedule definitions")
+    
+    # schedule toggle
+    toggle_parser = schedule_subparsers.add_parser("toggle", help="Enable or disable a schedule")
+    toggle_parser.add_argument("--name", required=True, help="Name of the schedule")
+    toggle_parser.add_argument("--enable", action="store_true", help="Enable the schedule")
+    toggle_parser.add_argument("--disable", action="store_true", help="Disable the schedule")
+    
+    # schedule run-now
+    run_now_parser = schedule_subparsers.add_parser("run-now", help="Trigger a schedule run immediately")
+    run_now_parser.add_argument("--name", required=True, help="Name of the schedule")
+    
+    # schedule trigger-due
+    schedule_subparsers.add_parser("trigger-due", help="Trigger any due schedules immediately")
+    
+    # schedule history
+    history_parser = schedule_subparsers.add_parser("history", help="List run history")
+    history_parser.add_argument("--limit", type=int, default=20, help="Max run records to return")
+    
+    # schedule history-detail
+    detail_parser = schedule_subparsers.add_parser("history-detail", help="Show detail of a run")
+    detail_parser.add_argument("--run-id", required=True, help="UUID of the run")
+
     args = parser.parse_args()
     
     if args.command == "init":
@@ -826,6 +868,116 @@ def main():
             workbook=args.workbook,
             no_backup=args.no_backup
         )
+    elif args.command == "web":
+        from src.web_ui import start_web_server
+        start_web_server(port=args.port)
+    elif args.command == "schedule":
+        config = AppConfig()
+        db_path = os.path.join(config.output_dir, "scheduler.db")
+        
+        from src.scheduler import (
+            create_schedule, update_schedule, list_schedules, 
+            run_schedule_now, trigger_due_schedules, list_run_history,
+            get_run_history_detail
+        )
+        
+        if args.schedule_command == "add":
+            try:
+                create_schedule(
+                    db_path=db_path,
+                    name=args.name,
+                    expression=args.expression,
+                    job_type=args.job_type,
+                    workbook_path=args.workbook,
+                    sheet_name=args.sheet,
+                    platforms=args.platforms,
+                    post_limit=args.limit
+                )
+                print(f"[SUCCESS] Created schedule '{args.name}' with expression '{args.expression}'")
+            except Exception as e:
+                print(f"[ERROR] Failed to add schedule: {e}")
+                sys.exit(1)
+                
+        elif args.schedule_command == "list":
+            schedules = list_schedules(db_path)
+            if not schedules:
+                print("No schedules defined.")
+                return
+            print(f"{'ID':<4} {'Name':<20} {'Recurrence':<18} {'Job Type':<10} {'Enabled':<8} {'Next Run':<25}")
+            print("-" * 90)
+            for s in schedules:
+                enabled_str = "Yes" if s["enabled"] == 1 else "No"
+                next_run_str = s["next_run_at"] or "N/A"
+                print(f"{s['id']:<4} {s['name']:<20} {s['expression']:<18} {s['job_type']:<10} {enabled_str:<8} {next_run_str:<25}")
+                
+        elif args.schedule_command == "toggle":
+            if not args.enable and not args.disable:
+                print("[ERROR] Please specify either --enable or --disable")
+                sys.exit(1)
+            enabled_val = 1 if args.enable else 0
+            try:
+                update_schedule(db_path, args.name, enabled=enabled_val)
+                state_str = "enabled" if args.enable else "disabled"
+                print(f"[SUCCESS] Schedule '{args.name}' has been {state_str}.")
+            except Exception as e:
+                print(f"[ERROR] Failed to toggle schedule: {e}")
+                sys.exit(1)
+                
+        elif args.schedule_command == "run-now":
+            schedules = list_schedules(db_path)
+            sch_id = None
+            for s in schedules:
+                if s["name"] == args.name:
+                    sch_id = s["id"]
+                    break
+            if sch_id is None:
+                print(f"[ERROR] Schedule '{args.name}' not found.")
+                sys.exit(1)
+                
+            run_id = run_schedule_now(db_path, sch_id, config)
+            print(f"[SUCCESS] Launched run immediately for schedule '{args.name}' in background (Run ID: {run_id}).")
+            
+        elif args.schedule_command == "trigger-due":
+            trigger_due_schedules(db_path, config)
+            print("[INFO] Finished triggering due schedules.")
+            
+        elif args.schedule_command == "history":
+            history = list_run_history(db_path, args.limit)
+            if not history:
+                print("No execution history.")
+                return
+            print(f"{'Run ID':<38} {'Schedule':<20} {'Status':<12} {'Started At':<25} {'Outcome Summary'}")
+            print("-" * 120)
+            for r in history:
+                sch_name = r["schedule_name"] or "(Deleted)"
+                summary_str = r["summary"] or r["error_message"] or ""
+                print(f"{r['run_id']:<38} {sch_name:<20} {r['status'].upper():<12} {r['started_at']:<25} {summary_str}")
+                
+        elif args.schedule_command == "history-detail":
+            detail = get_run_history_detail(db_path, args.run_id)
+            if not detail:
+                print(f"[ERROR] Run history with ID '{args.run_id}' not found.")
+                sys.exit(1)
+            print(f"Run ID:        {detail['run_id']}")
+            print(f"Schedule Name: {detail['schedule_name'] or '(Deleted)'}")
+            print(f"Trigger Type:  {detail['trigger_type']}")
+            print(f"Status:        {detail['status'].upper()}")
+            print(f"Started At:    {detail['started_at']}")
+            print(f"Finished At:   {detail['finished_at'] or 'N/A'}")
+            print(f"Summary:       {detail['summary'] or 'N/A'}")
+            if detail['error_message']:
+                print(f"Error Message: {detail['error_message']}")
+            print("\nRow-Level Posting Details:")
+            print("=" * 100)
+            if not detail['details']:
+                print("No details recorded.")
+            else:
+                print(f"{'Sheet':<15} {'Row':<5} {'Platform':<12} {'Status':<10} {'Message'}")
+                print("-" * 100)
+                for d in detail['details']:
+                    print(f"{d['sheet_name']:<15} {d['row_id']:<5} {d['platform']:<12} {d['status'].upper():<10} {d['message']}")
+        else:
+            schedule_parser.print_help()
     else:
         parser.print_help()
 

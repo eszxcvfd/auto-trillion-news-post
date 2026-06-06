@@ -11,6 +11,15 @@ config.local.yaml
 config.local.yml
 config.local.json
 
+# Python local environments and caches.
+.venv/
+venv/
+env/
+ENV/
+__pycache__/
+*.py[cod]
+*$py.class
+
 # Generated output artifacts.
 output/
 

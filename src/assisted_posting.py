@@ -28,7 +28,7 @@ def parse_post_markdown(filepath: str) -> str:
     post_body = content[idx + len(marker):].strip()
     return post_body
 
-def run_assisted_posting(item: NewsItem, config: AppConfig, post_content: str = None) -> bool:
+def run_assisted_posting(item: NewsItem, config: AppConfig, post_content: str = None, confirm_callback = None) -> bool:
     """
     Launches Playwright in non-headless mode, opens LinkedIn,
     pastes the post draft, uploads the screenshot (if exists),
@@ -167,7 +167,10 @@ def run_assisted_posting(item: NewsItem, config: AppConfig, post_content: str = 
                 print("="*60)
                 if image_path:
                     print(f"Image Path: {image_path}")
-                input("Press Enter to close browser and return...")
+                if confirm_callback:
+                    confirm_callback()
+                else:
+                    input("Press Enter to close browser and return...")
                 return False
                 
             print("\n[SUCCESS] Logged in successfully!")
@@ -320,12 +323,16 @@ def run_assisted_posting(item: NewsItem, config: AppConfig, post_content: str = 
             
             # CLI prompt
             time.sleep(1) # Let stdout print cleanly
-            ans = input("Did you successfully publish the post? [y/N]: ").strip().lower()
-            success = ans in ["y", "yes"]
-            
-            if success:
-                url_input = input("Enter the post URL (optional, press Enter to use '[posted-no-link]'): ").strip()
-                item.post_url = url_input
+            if confirm_callback:
+                success, post_url = confirm_callback()
+                if success:
+                    item.post_url = post_url
+            else:
+                ans = input("Did you successfully publish the post? [y/N]: ").strip().lower()
+                success = ans in ["y", "yes"]
+                if success:
+                    url_input = input("Enter the post URL (optional, press Enter to use '[posted-no-link]'): ").strip()
+                    item.post_url = url_input
                 
             return success
             
@@ -338,7 +345,10 @@ def run_assisted_posting(item: NewsItem, config: AppConfig, post_content: str = 
             if image_path:
                 print(f"Image Path: {image_path}")
             print("\n")
-            input("Press Enter to close browser and return...")
+            if confirm_callback:
+                confirm_callback()
+            else:
+                input("Press Enter to close browser and return...")
             return False
             
         finally:
