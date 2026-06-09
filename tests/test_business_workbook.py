@@ -444,12 +444,14 @@ class TestBusinessWorkbook(unittest.TestCase):
         ws = wb["Payment"]
         # LinkedIn column is 4th (1-based index) and should contain the post file path
         linkedin_cell_val = ws.cell(row=2, column=4).value
+        from src.draft_paths import resolve_post_draft_path
+
         self.assertIn("_001_", linkedin_cell_val)
         self.assertTrue(linkedin_cell_val.endswith("_linkedin.md"))
-        self.assertTrue(os.path.exists(linkedin_cell_val))
+        self.assertTrue(os.path.exists(resolve_post_draft_path(linkedin_cell_val, config.excel_file)))
         
-        # Verify markdown content contains the draft
-        with open(linkedin_cell_val, "r", encoding="utf-8") as f:
+        resolved_linkedin_path = resolve_post_draft_path(linkedin_cell_val, config.excel_file)
+        with open(resolved_linkedin_path, "r", encoding="utf-8") as f:
             post_content = f.read()
             self.assertIn("Generated draft for linkedin - Merchant Payments Title", post_content)
             
@@ -497,11 +499,14 @@ class TestBusinessWorkbook(unittest.TestCase):
         self.assertIsNone(ws.cell(row=2, column=4).value)
         # Row 3 (ID 2) should have the generated draft file path
         linkedin_cell_val = ws.cell(row=3, column=4).value
+        from src.draft_paths import resolve_post_draft_path
+
         self.assertIn("_002_", linkedin_cell_val)
         self.assertTrue(linkedin_cell_val.endswith("_linkedin.md"))
-        self.assertTrue(os.path.exists(linkedin_cell_val))
+        self.assertTrue(os.path.exists(resolve_post_draft_path(linkedin_cell_val, config.excel_file)))
         
-        with open(linkedin_cell_val, "r", encoding="utf-8") as f:
+        resolved_linkedin_path = resolve_post_draft_path(linkedin_cell_val, config.excel_file)
+        with open(resolved_linkedin_path, "r", encoding="utf-8") as f:
             post_content = f.read()
             self.assertIn("Generated draft for linkedin - Title 2", post_content)
         wb.close()
@@ -548,9 +553,11 @@ class TestBusinessWorkbook(unittest.TestCase):
         self.assertIsNone(wb["Payment"].cell(row=2, column=4).value)
         # Fintech sheet (targeted) should have the generated draft file path
         linkedin_cell_val = wb["Fintech"].cell(row=2, column=4).value
+        from src.draft_paths import resolve_post_draft_path
+
         self.assertIn("_001_", linkedin_cell_val)
         self.assertTrue(linkedin_cell_val.endswith("_linkedin.md"))
-        self.assertTrue(os.path.exists(linkedin_cell_val))
+        self.assertTrue(os.path.exists(resolve_post_draft_path(linkedin_cell_val, config.excel_file)))
         
         wb.close()
 

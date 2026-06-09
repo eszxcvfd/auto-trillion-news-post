@@ -219,19 +219,22 @@ def ingest_business_workbook(filepath: str, sheet_scope: Optional[List[str]] = N
                         elif attr_name in ["linkedin_draft", "facebook_draft", "x_draft", "instagram_draft", "pinterest_draft", "threads_draft", "tiktok_draft", "youtube_draft"]:
                             cell_str = normalize_cell_content(val)
                             if cell_str:
-                                test_paths = [
-                                    cell_str,
-                                    os.path.join(os.path.dirname(filepath), cell_str) if filepath else "",
-                                ]
-                                resolved_content = None
-                                for p in test_paths:
-                                    if p and os.path.exists(p) and os.path.isfile(p):
-                                        from src.assisted_posting import parse_post_markdown
-                                        parsed = parse_post_markdown(p)
-                                        if parsed:
-                                            resolved_content = parsed
-                                            break
-                                row_data[attr_name] = resolved_content if resolved_content is not None else cell_str
+                                from src.draft_paths import load_draft_from_cell, looks_like_file_reference
+
+                                resolved_content = load_draft_from_cell(cell_str, filepath)
+                                if resolved_content is not None:
+                                    row_data[attr_name] = resolved_content
+                                elif looks_like_file_reference(cell_str):
+                                    platform_key = attr_name.replace("_draft", "")
+                                    broken_refs = row_data.get("broken_draft_refs") or {}
+                                    broken_refs[platform_key] = cell_str
+                                    row_data["broken_draft_refs"] = broken_refs
+                                    warnings.append(
+                                        f"Row {row_idx} in sheet '{name}': draft file not found ({cell_str})"
+                                    )
+                                    row_data[attr_name] = None
+                                else:
+                                    row_data[attr_name] = cell_str
                             else:
                                 row_data[attr_name] = None
                         else:
@@ -265,7 +268,8 @@ def ingest_business_workbook(filepath: str, sheet_scope: Optional[List[str]] = N
                     threads_draft=row_data.get("threads_draft"),
                     tiktok_draft=row_data.get("tiktok_draft"),
                     youtube_draft=row_data.get("youtube_draft"),
-                    link_post_raw=row_data.get("link_post_raw")
+                    link_post_raw=row_data.get("link_post_raw"),
+                    broken_draft_refs=row_data.get("broken_draft_refs"),
                 )
                 parsed_rows.append(business_row)
                 
@@ -460,18 +464,51 @@ def save_news_to_business_excel(items: List[NewsItem], config, limit: Optional[i
                     existing_normalized_titles.add(normalize_title(str(cell_val)))
                     
             norm_item_title = normalize_title(item.title)
-            if norm_item_title in existing_normalized_titles:
-                if item.image_file and item.image_file.startswith("temp_"):
-                    temp_path = os.path.join(config.image_dir, item.image_file)
-                    if os.path.exists(temp_path):
-                        try:
-                            os.remove(temp_path)
-                        except Exception:
-                            pass
-                print(f"[INFO] Skipping already saved title in sheet '{sheet_name}': {item.title}")
-                continue
-                
             id_col = col_map.get("#", 1)
+            col_img = col_map.get("image link", 3)
+            if norm_item_title in existing_normalized_titles:
+                backfilled_image = False
+                if item.image_file and item.image_file.startswith("temp_"):
+                    for r in range(2, ws.max_row + 1):
+                        if normalize_title(str(ws.cell(row=r, column=title_col).value)) != norm_item_title:
+                            continue
+                        existing_img = normalize_cell_content(ws.cell(row=r, column=col_img).value)
+                        if existing_img:
+                            break
+                        row_id_val = ws.cell(row=r, column=id_col).value
+                        try:
+                            row_id = int(float(row_id_val))
+                        except (ValueError, TypeError):
+                            row_id = row_id_val or r
+                        if not item.found_date:
+                            from datetime import datetime
+                            item.found_date = datetime.now().strftime("%Y-%m-%d")
+                        old_filename = item.image_file
+                        old_path = os.path.join(config.image_dir, old_filename)
+                        ext = os.path.splitext(old_filename)[1]
+                        slug_kw = slugify(sheet_name or item.keyword or "news")
+                        padded_id = f"{row_id:03d}" if isinstance(row_id, int) else str(row_id)
+                        new_filename = f"{item.found_date}_{padded_id}_{slug_kw}{ext}"
+                        new_path = os.path.join(config.image_dir, new_filename)
+                        if os.path.exists(old_path):
+                            try:
+                                os.rename(old_path, new_path)
+                                ws.cell(row=r, column=col_img).value = new_filename
+                                backfilled_image = True
+                                print(f"[INFO] Backfilled image link for existing row in sheet '{sheet_name}': {item.title}")
+                            except Exception as e:
+                                print(f"[WARNING] Failed to backfill image for existing row: {e}")
+                        break
+                    if not backfilled_image:
+                        temp_path = os.path.join(config.image_dir, item.image_file)
+                        if os.path.exists(temp_path):
+                            try:
+                                os.remove(temp_path)
+                            except Exception:
+                                pass
+                if not backfilled_image:
+                    print(f"[INFO] Skipping already saved title in sheet '{sheet_name}': {item.title}")
+                continue
             # Find the maximum numeric ID currently in the sheet to ensure contiguous assignment
             max_id = 0
             for r in range(2, ws.max_row + 1):
@@ -510,9 +547,8 @@ def save_news_to_business_excel(items: List[NewsItem], config, limit: Optional[i
                 else:
                     item.image_file = None
                     
-            col_id = col_map.get("#", 1)
+            col_id = id_col
             col_title = col_map.get("trillion $ news title", 2)
-            col_img = col_map.get("image link", 3)
             
             new_row_idx = ws.max_row + 1
             ws.cell(row=new_row_idx, column=col_id).value = item.id
@@ -657,10 +693,13 @@ def generate_drafts_for_business_excel(config, limit: Optional[int] = None, plat
                     continue
                     
                 missing_platforms = []
+                post_dir = getattr(config, "post_dir", None)
                 for p in target_platforms:
                     if p in platform_cols:
                         cell_val = ws.cell(row=row_idx, column=platform_cols[p]).value
-                        if normalize_cell_content(cell_val) is None:
+                        from src.draft_paths import draft_cell_has_content
+
+                        if not draft_cell_has_content(cell_val, filepath, post_dir):
                             missing_platforms.append(p)
                             
                 if not missing_platforms:
@@ -732,3 +771,65 @@ def generate_drafts_for_business_excel(config, limit: Optional[int] = None, plat
         print(f"[SUCCESS] Generation complete. Generated drafts for {rows_processed} rows.")
     finally:
         wb.close()
+
+
+def repair_broken_draft_references(config) -> List[str]:
+    """Clear platform draft cells that point to markdown files missing on disk."""
+    filepath = config.excel_file
+    if not os.path.exists(filepath):
+        raise FileNotFoundError(f"Workbook file '{filepath}' does not exist.")
+
+    from src.writeback import is_workbook_locked
+    from src.draft_paths import looks_like_file_reference, resolve_post_draft_path
+
+    if is_workbook_locked(filepath):
+        raise PermissionError(
+            f"Workbook '{filepath}' is currently locked/open in another application."
+        )
+
+    post_dir = getattr(config, "post_dir", None)
+    wb = openpyxl.load_workbook(filepath)
+    actions: List[str] = []
+
+    try:
+        for sheet_name in wb.sheetnames:
+            ws = wb[sheet_name]
+            header_row = []
+            for row in ws.iter_rows(max_row=1, values_only=True):
+                header_row = row
+                break
+            if not header_row:
+                continue
+
+            col_map = {}
+            for idx, val in enumerate(header_row):
+                norm = normalize_header(val)
+                if norm:
+                    col_map[norm] = idx + 1
+
+            platform_cols = {}
+            for plat_norm in REQUIRED_MAPPING:
+                if plat_norm in ("#", "trillion $ news title", "image link"):
+                    continue
+                if plat_norm in col_map:
+                    platform_cols[plat_norm] = col_map[plat_norm]
+
+            for row_idx in range(2, ws.max_row + 1):
+                for plat_norm, col_idx in platform_cols.items():
+                    cell_val = ws.cell(row=row_idx, column=col_idx).value
+                    cell_str = normalize_cell_content(cell_val)
+                    if not cell_str or not looks_like_file_reference(cell_str):
+                        continue
+                    if resolve_post_draft_path(cell_str, filepath, post_dir):
+                        continue
+                    ws.cell(row=row_idx, column=col_idx).value = None
+                    actions.append(
+                        f"Cleared broken {plat_norm} draft reference on Excel row {row_idx} in sheet '{sheet_name}'"
+                    )
+
+        if actions:
+            wb.save(filepath)
+    finally:
+        wb.close()
+
+    return actions

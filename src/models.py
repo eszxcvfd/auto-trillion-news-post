@@ -38,6 +38,7 @@ class BusinessWorkbookRow:
     tiktok_draft: Optional[str] = None
     youtube_draft: Optional[str] = None
     link_post_raw: Optional[str] = None
+    broken_draft_refs: Optional[Dict[str, str]] = None
 
     def to_dict(self):
         return asdict(self)
