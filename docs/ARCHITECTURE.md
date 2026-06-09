@@ -77,6 +77,8 @@ Playwright is used for browser automation responsibilities only:
 - searching Google/Bing news
 - capturing screenshots of retained news cards
 - loading persistent browser sessions
+- capturing or refreshing application-managed session state after operator
+  login from a supported surface
 - checking login state per platform
 - opening composers or post forms
 - filling draft content
@@ -119,7 +121,7 @@ Local filesystem storage is the default persistence layer for MVP operation:
 - screenshots
 - downloaded or cached images
 - generated post markdown files
-- session directories
+- application-owned session directories or storage-state artifacts
 - logs
 - temporary artifacts and backups
 
@@ -225,6 +227,9 @@ Owns use cases and orchestration logic:
 - session status checks
 
 Application code coordinates domain rules and calls infrastructure ports.
+
+Future Web UI session onboarding should call the same application layer rather
+than directly owning browser-session persistence rules.
 
 ### Infrastructure
 

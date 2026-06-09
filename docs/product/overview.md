@@ -25,7 +25,8 @@ Primary user:
 Working assumptions:
 
 - comfortable with Excel and browser-based workflows
-- can log into social platforms manually when required
+- can log into social platforms manually when onboarding or refreshing a saved
+  session
 - prefers local files and visible browser automation over hidden background
   systems
 
@@ -72,7 +73,7 @@ Pipeline B should:
 - honor operator edits made in Excel
 - resolve image sources from local files or Google Drive URLs
 - apply selective posting rules from `Link Post`
-- post to supported platforms with persistent sessions
+- post to supported platforms with application-managed persistent sessions
 - write back result lines per platform
 
 ## Control Surfaces
@@ -83,7 +84,7 @@ Required surface today:
 
 Planned surfaces:
 
-- Web UI for non-technical operation
+- Web UI for non-technical operation and platform-session onboarding
 - Scheduling for local timed runs after the posting core is stable
 
 Brownfield rule:
@@ -131,18 +132,18 @@ Implemented now:
 - local harvesting
 - Gemini generation
 - internal workbook compatibility
-- assisted LinkedIn posting
+- business workbook ingestion
+- `Link Post` parser/writer and safe result write-back
+- shared posting core for LinkedIn, Facebook, and X
+- Web UI operator surface
+- Web UI manual harvest-and-generate trigger with run history visibility
+- local scheduling and run history
 
 Planned next:
 
-- business workbook ingestion
-- `Link Post` parser/writer
-- shared posting core
-- LinkedIn, Facebook, and X end-to-end support
+- Web UI session onboarding and reuse
 - later rollout for Instagram, Pinterest, Threads, TikTok, and YouTube
 
 Future only:
 
-- Web UI
-- scheduling
 - dashboard/history backed by operational storage

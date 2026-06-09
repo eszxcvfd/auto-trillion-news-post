@@ -68,11 +68,12 @@ Done when:
 Scope:
 
 - Web UI for non-technical operation
+- Web UI session onboarding and refresh for supported platforms
 - local scheduling
 - dashboard/history for run visibility
 
 Done when:
 
-- the operator can choose a workbook, run jobs, and inspect status without
-  using the CLI directly
+- the operator can choose a workbook, manage saved platform sessions, run jobs,
+  and inspect status without using the CLI directly
 - scheduled runs and run history are visible and recoverable

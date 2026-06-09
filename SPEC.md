@@ -44,12 +44,8 @@ Repo hiện đã có các năng lực đã được thể hiện trong code và 
 
 Các hạng mục sau chưa được xem là implemented ở thời điểm chốt spec này:
 
-- Đọc workbook business nhiều sheet theo schema `Trillion $ news.xlsx`.
 - Tự động đăng thống nhất lên đủ 8 nền tảng từ một row business workbook.
-- Cơ chế selective posting dựa trên `Link Post`.
-- Lớp poster chung cho nhiều nền tảng với write-back kết quả riêng từng platform.
-- Web UI FastAPI/Jinja2/HTMX.
-- Scheduling local bền vững cho posting jobs.
+- Web UI session onboarding/refresh để operator login một lần và tái sử dụng session ở các lần post sau.
 - Dashboard lịch sử, thông báo, và vận hành đa luồng hoàn chỉnh.
 
 ### 3.3 Problems Found in the Previous SPEC
@@ -72,7 +68,7 @@ Xây dựng một local operations tool giúp team nội dung chạy đúng lu�
 4. Dùng Gemini sinh 8 nội dung bài đăng cho 8 nền tảng.
 5. Ghi tiêu đề, ảnh local, và 8 bài nháp vào workbook vận hành `Trillion $ news.xlsx`.
 6. Cho phép người dùng mở Excel để xem trước hoặc chỉnh sửa nếu muốn.
-7. Đọc lại workbook để tự động đăng lên 8 nền tảng bằng session đã lưu.
+7. Đọc lại workbook để cho phép operator chọn nền tảng cần đăng và tự động đăng lên nền tảng đã chọn bằng session đã lưu.
 8. Lấy link bài đăng thực tế và ghi ngược lại vào cột `Link Post`.
 
 Đây không phải là sản phẩm SaaS đa tenant. Đây là công cụ nội bộ chạy local, ưu tiên ổn định vận hành hơn là độ phức tạp hệ thống.
@@ -92,8 +88,9 @@ Người dùng chính là Content Admin / Marketing Operator:
 Hệ thống chạy trên máy local của team:
 
 - Dùng browser thật.
-- Lưu session local theo từng nền tảng.
+- Lưu session local theo từng nền tảng như tài sản do ứng dụng quản lý.
 - Lưu workbook, ảnh, draft, và logs trên filesystem local.
+- Không phụ thuộc vào việc operator đang login sẵn trong Chrome profile của môi trường developer trước mỗi lần post.
 - Chấp nhận có bước human-in-the-loop khi login, captcha, hoặc nền tảng thay đổi UI.
 
 ## 6. Scope
@@ -109,8 +106,9 @@ Hệ thống chạy trên máy local của team:
 - Sinh đủ 8 draft social cho mỗi bài được giữ lại trong flow v2.
 - Ghi kết quả đăng bài vào `Link Post`.
 - Có CLI tiếp tục dùng được.
-- Có Web UI cơ bản ở giai đoạn sau.
-- Có scheduling local ở giai đoạn sau.
+- Có Web UI local cho vận hành.
+- Có luồng login hoặc refresh session qua Web UI để lưu và tái sử dụng session platform.
+- Có scheduling local và run history cơ bản.
 
 ### 6.2 Out of Scope
 
@@ -151,6 +149,7 @@ Input:
 
 - Workbook business nhiều sheet, mỗi row là một nội dung có thể đăng đa nền tảng.
 - Ảnh local path hoặc Google Drive sharing URL.
+- Lựa chọn nền tảng do operator chỉ định khi thực hiện action `post` thủ công từ CLI hoặc Web UI.
 
 Output:
 
@@ -179,14 +178,15 @@ Pipeline A
        ▼
 Pipeline B
 6. Đọc draft từ Trillion $ news.xlsx và bỏ qua các platform đã có Link Post thành công
-7. Đăng bài lên 8 nền tảng qua Playwright bằng session lưu sẵn
+7. Khi operator trigger action `post`, cho phép chọn platform muốn đăng rồi đăng bài lên platform đã chọn qua Playwright bằng session lưu sẵn
 8. Capture link bài đăng thực tế và ghi ngược lại vào cột Link Post
 ```
 
 ### 7.4 Control Surfaces
 
 - CLI là surface bắt buộc phải duy trì.
-- Web UI là surface bổ sung cho vận hành non-tech.
+- Web UI là surface bổ sung cho vận hành non-tech và session onboarding.
+- Cả CLI và Web UI phải cho phép operator chọn platform cụ thể khi trigger action `post` trên một row.
 
 ### 7.5 Operator Review Gate
 
@@ -485,7 +485,7 @@ Pipeline B phải:
 - Giữ lại `sheet name` như category vận hành.
 - Bỏ qua row không có title hợp lệ.
 - Trim header và trim content.
-- Xác định platform cần đăng dựa trên draft content và `Link Post`.
+- Xác định platform cần đăng dựa trên draft content, `Link Post`, và lựa chọn platform của operator khi action `post` được trigger thủ công.
 - Xem nội dung đang có trong Excel (hoặc nội dung trong file Markdown được trỏ tới bởi đường dẫn file local trong ô) là nội dung cuối cùng để post, kể cả khi người dùng đã sửa tay.
 - Tự động phân giải (resolve) đường dẫn file draft Markdown trong các cột nền tảng thành nội dung bài viết hoàn chỉnh trên ổ đĩa.
 
@@ -494,6 +494,7 @@ Acceptance Criteria:
 - Given workbook có nhiều sheet hợp lệ, when ingest chạy, then hệ thống đọc được tất cả row có title hợp lệ.
 - Given header có whitespace thừa, when parse workbook, then mapping header vẫn thành công.
 - Given row có content là `.`, when xác định platform cần đăng, then platform đó bị skip.
+- Given một row có nhiều draft platform hợp lệ, when operator thực hiện action `post` thủ công, then hệ thống cho phép chọn đúng một platform mục tiêu để chạy posting cho action đó.
 - Given operator sửa draft trong Excel hoặc ghi đường dẫn file draft Markdown, when posting bắt đầu, then hệ thống phân giải và sử dụng nội dung bài viết tương ứng.
 
 ### FR-07 — Image Resolution
@@ -526,12 +527,16 @@ Hệ thống phải:
 
 - Dùng persistent session riêng cho từng nền tảng.
 - Hỗ trợ login thủ công lần đầu.
+- Cho phép khởi tạo hoặc refresh session qua Web UI.
 - Tái sử dụng session ở các lần sau.
+- Lưu session như trạng thái local do ứng dụng quản lý, không phụ thuộc vào Chrome profile của môi trường developer đang login sẵn.
 - Báo trạng thái `login-required` khi session không còn hợp lệ.
 
 Acceptance Criteria:
 
 - Given operator đã login thành công trước đó, when run posting mới bắt đầu, then hệ thống thử tái sử dụng session đã lưu.
+- Given operator mở Web UI và thực hiện login thành công cho một platform, when flow login kết thúc, then session của platform đó được lưu lại để dùng cho các lần post sau.
+- Given operator đã có session hợp lệ được lưu bởi ứng dụng, when bắt đầu một lần post mới, then hệ thống mở lại session đó thay vì yêu cầu login lại vào môi trường Chrome developer.
 - Given session hết hạn hoặc logout, when kiểm tra session thất bại, then platform đó nhận trạng thái `login-required`.
 
 ### FR-09 — Multi-Platform Posting Core
@@ -607,6 +612,7 @@ CLI tương lai cho Pipeline B phải cho phép ít nhất:
 - Chọn workbook business.
 - Chọn sheet hoặc phạm vi row.
 - Chọn platform hoặc tập platform.
+- Khi action `post` được gọi cho một row cụ thể, cho phép chọn đúng platform muốn đăng thay vì buộc chạy toàn bộ platform còn hợp lệ trên row đó.
 - Chạy selective posting.
 - Chạy dry-run để xem row/platform nào sẽ được post mà chưa submit thật.
 - Kiểm tra trạng thái session/login.
@@ -617,18 +623,20 @@ Acceptance Criteria:
 
 - Given operator dùng CLI בלבד, when cần chạy flow chính, then CLI bao phủ được từ keyword đến workbook và posting chọn lọc.
 - Given operator chỉ muốn post lại một tập row/platform, when dùng CLI, then có cách giới hạn phạm vi posting.
+- Given operator gọi action `post` thủ công cho một row có nhiều draft, when chỉ định một platform cụ thể, then CLI chỉ khởi chạy posting cho platform đó.
 - Given operator chạy dry-run, when hệ thống xử lý workbook, then hệ thống hiển thị danh sách row/platform sẽ đăng nhưng không submit bài thật.
 
 ### FR-13 — Web UI Surface
 
-Web UI là target của v2, chưa được xem là baseline hiện có.
+Web UI là surface local đã có và sẽ tiếp tục mở rộng cho session onboarding.
 
 Web UI MVP phải cho phép:
 
 - Chọn hoặc nạp workbook.
 - Xem danh sách sheet và rows.
 - Xem trạng thái session/login theo platform.
-- Trigger posting jobs.
+- Bắt đầu login hoặc refresh session cho từng platform.
+- Trigger posting jobs với lựa chọn platform cụ thể trên từng row.
 - Xem kết quả posting theo row và platform.
 
 Preview và chỉnh sửa draft trong UI là desirable, nhưng không phải điều kiện tối thiểu để xem posting UI là usable.
@@ -636,11 +644,14 @@ Preview và chỉnh sửa draft trong UI là desirable, nhưng không phải đi
 Acceptance Criteria:
 
 - Given operator non-tech, when dùng UI, then họ có thể chọn workbook, chạy job, và xem trạng thái chính mà không cần CLI.
+- Given operator chưa có session hợp lệ cho một platform, when dùng Web UI để login thành công, then UI lưu được session đó và hiển thị trạng thái sẵn sàng cho lần post sau.
+- Given operator đã có session hợp lệ cho một platform, when trigger posting từ UI hoặc CLI, then hệ thống tái sử dụng session đã lưu.
+- Given một row có nhiều platform có draft hợp lệ, when operator bấm action `post` từ Web UI, then UI phải cho phép chọn platform muốn đăng trước khi khởi chạy browser automation.
 - Given posting job đã chạy, when mở UI, then operator xem được kết quả theo row/platform.
 
 ### FR-14 — Scheduling
 
-Scheduling là target mở rộng sau posting core.
+Scheduling đã có ở mức local và có thể tiếp tục mở rộng theo nhu cầu vận hành.
 
 Khi được triển khai, scheduling phải cho phép:
 
@@ -648,8 +659,6 @@ Khi được triển khai, scheduling phải cho phép:
 - Lưu cấu hình lịch.
 - Trigger posting jobs theo giờ.
 - Lưu log từng lần chạy.
-
-Nếu scheduling chưa có, spec không được mô tả nó như một capability đã sẵn sàng.
 
 Acceptance Criteria:
 
@@ -672,6 +681,7 @@ Acceptance Criteria:
 
 - Người dùng non-tech có thể vận hành qua workbook và CLI/UI tối thiểu.
 - Browser visible phải khả dụng khi cần login hoặc xác nhận thủ công.
+- Luồng login session phải có thể được thực hiện từ UI mà không bắt operator phụ thuộc vào một Chrome dev environment đã đăng nhập sẵn.
 
 ### 11.4 Maintainability
 
@@ -705,7 +715,7 @@ Các chi tiết kiến trúc cụ thể thuộc `docs/ARCHITECTURE.md`, không n
 ## 13. Assumptions
 
 - Operator có quyền đăng bài trên các account social tương ứng.
-- Các account có thể được login thủ công ít nhất một lần khi cần khởi tạo session.
+- Các account có thể được login thủ công ít nhất một lần qua surface được hỗ trợ như Web UI khi cần khởi tạo hoặc refresh session.
 - Workbook customer giữ nguyên schema 12 cột trong MVP, trừ trường hợp hệ thống tự bổ sung `Link Post` khi bị thiếu.
 - Google Drive image link phải public hoặc truy cập được mà không cần login Google bổ sung trong luồng tải ảnh.
 - Browser automation có thể bị ảnh hưởng bởi UI thay đổi, captcha, rate limit, account restriction, hoặc thay đổi chính sách nền tảng.
@@ -757,6 +767,7 @@ Contract log tối thiểu này tồn tại để:
 
 - Hệ thống không được lưu raw password vào workbook, log, hoặc source code.
 - Session local phải được xem là dữ liệu nhạy cảm và chỉ lưu trên máy vận hành được kiểm soát.
+- Session lưu bởi ứng dụng phải được tách khỏi việc “đang login sẵn” trong môi trường Chrome developer của máy.
 - Log không được vô tình lộ secrets, cookie, hoặc token đăng nhập.
 
 ### 17.2 Platform Automation Rules
