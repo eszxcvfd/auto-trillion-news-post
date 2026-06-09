@@ -101,11 +101,19 @@ Default paths (override via `.env`):
 5. **Proof before done** — run targeted tests; update story validation or
    harness matrix when behavior changes.
 
+## Current Work In Flight
+
+_No story packet is actively in execution._
+
 ## Recent Scope Closure
 
 | Story | Topic | Harness status |
 | --- | --- | --- |
+| US-020 | Web UI post draft editor (Word-like, `output/posts/`) | implemented |
+| US-019 | Web UI keyword and article management | implemented |
 | US-018 | LinkedIn-only project scope | implemented |
+
+Story packet: `docs/stories/epics/E20-web-ui-post-draft-editor/US-020-web-ui-post-draft-editor/`
 
 <!-- HARNESS:BEGIN -->
 ## Harness

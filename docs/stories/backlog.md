@@ -5,9 +5,19 @@ candidate implementation slices.
 
 ## Active Work
 
+_No story packets are queued for execution._
+
+## Recently Completed
+
 | Story | Slice | Status |
 | --- | --- | --- |
+| US-020 | Web UI post draft editor (Word-like, `output/posts/`) | implemented |
+| US-019 | Web UI keyword and article management | implemented |
+
+See `docs/stories/epics/E20-web-ui-post-draft-editor/US-020-web-ui-post-draft-editor/`.
 | US-018 | LinkedIn-only project scope (config, runtime, UI, docs) | implemented |
+
+See `docs/stories/epics/E19-web-ui-content-management/US-019-web-ui-keyword-article-management/`.
 
 See `docs/stories/epics/E18-linkedin-only-scope/US-018-linkedin-only-scope/`.
 
@@ -40,7 +50,9 @@ active supported behavior after decision `0012-linkedin-only-project-scope.md`.
 
 | Release | Main slices | Status |
 | --- | --- | --- |
-| Current | US-018 LinkedIn-only scope | implemented |
+| Current | US-020 Web UI post draft editor (`output/posts/`) | implemented |
+| Release D | US-019 operator content management from Web UI | implemented |
+| Release E | US-020 Word-like post draft editing in Web UI | implemented |
 | Release A | US-001 to US-005 baseline stabilization | implemented |
 | Release B1 | US-006, US-007, US-008, US-016 (LinkedIn active) | implemented |
 | Release B2 | US-014 Instagram/Pinterest/Threads | implemented — inactive |
