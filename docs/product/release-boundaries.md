@@ -1,8 +1,33 @@
 # Release Boundaries
 
-Derived from [SPEC.md](/home/trung/Documents/2026/project/auto-trillion-news-post/SPEC.md).
+Derived from [SPEC.md](/home/trung/Documents/2026/project/auto-trillion-news-post/SPEC.md)
+and [docs/decisions/0012-linkedin-only-project-scope.md](/home/trung/Documents/2026/project/auto-trillion-news-post/docs/decisions/0012-linkedin-only-project-scope.md).
 
 This file turns the seed spec into staged product rollout boundaries.
+
+## Current Release — LinkedIn-Only Scope (US-018)
+
+**Status:** implemented (2026-06-09).
+
+Scope:
+
+- LinkedIn as the sole supported platform for draft generation, planning,
+  assisted posting, scheduling, and session onboarding
+- config and Web UI treat LinkedIn as a fixed default (no editable platform
+  picker)
+- runtime rejection of non-LinkedIn requests
+- workbook compatibility for legacy non-LinkedIn columns without active
+  supported behavior
+- dashboard hides rows without a LinkedIn footprint; repair prunes operator-
+  stray legacy rows
+
+Done when:
+
+- product docs, UI copy, and agent instructions consistently describe
+  LinkedIn-only scope
+- tests and harness matrix evidence show LinkedIn-only enforcement
+- operators can run the full golden flow on LinkedIn without multi-platform
+  controls surfacing as supported
 
 ## Release A — Brownfield Stabilization
 
@@ -14,10 +39,13 @@ Scope:
 
 Done when:
 
-- baseline implemented behavior is clearly separated from target v2 behavior
+- baseline implemented behavior is clearly separated from superseded multi-
+  platform direction
 - current tests still prove the baseline
 
-## Release B1 — Business Workbook + Platform Posting Foundation
+**Status:** implemented.
+
+## Release B1 — Business Workbook + LinkedIn Posting Foundation
 
 Scope:
 
@@ -27,54 +55,50 @@ Scope:
 - parse and write `Link Post`
 - add selective posting
 - add image resolution
-- support LinkedIn, Facebook, and X through platform-owned posting workflows
-  behind shared eligibility and write-back orchestration
+- support **LinkedIn** through platform-owned posting workflows behind shared
+  eligibility and write-back orchestration
 
 Done when:
 
 - the operator can move from keyword input to reviewed workbook drafts without
   manual schema fixes
-- LinkedIn, Facebook, and X can post eligible rows and write back per-platform
-  results
+- LinkedIn can post eligible rows and write back per-platform results
 
-## Release B2 — Image-First and Mid-Risk Platforms
+**Status:** implemented (LinkedIn active; historical B1 also shipped Facebook/X
+adapters — now inactive per decision 0012).
 
-Scope:
+## Release B2 — Image-First and Mid-Risk Platforms (Historical)
 
-- Instagram
-- Pinterest
-- Threads
+Scope (superseded by decision 0012):
+
+- Instagram, Pinterest, Threads
 - stronger media handling and session stability for these platforms
 
-Done when:
+**Status:** code landed historically; **not active project scope**.
 
-- these platforms respect the capability matrix
-- duplicate posting is prevented through `Link Post`
+## Release B3 — High-Risk / Best-Effort Platforms (Historical)
 
-## Release B3 — High-Risk / Best-Effort Platforms
+Scope (superseded by decision 0012):
 
-Scope:
+- TikTok image/photo mode
+- YouTube Community Post mode
+- best-effort permalink capture
 
-- TikTok image/photo mode when supported by the operator account and UI
-- YouTube Community Post mode when supported by the operator channel
-- best-effort permalink capture for these platforms
-
-Done when:
-
-- scope is clearly limited to the supported MVP modes
-- these platforms are not misrepresented as full video pipelines
+**Status:** code landed historically; **not active project scope**.
 
 ## Release C — Web UI and Scheduling
 
 Scope:
 
 - Web UI for non-technical operation
-- Web UI session onboarding and refresh for supported platforms
+- Web UI session onboarding and refresh for **LinkedIn**
 - local scheduling
 - dashboard/history for run visibility
 
 Done when:
 
-- the operator can choose a workbook, manage saved platform sessions, run jobs,
+- the operator can choose a workbook, manage saved LinkedIn sessions, run jobs,
   and inspect status without using the CLI directly
 - scheduled runs and run history are visible and recoverable
+
+**Status:** implemented.

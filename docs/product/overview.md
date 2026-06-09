@@ -1,7 +1,8 @@
 # Product Overview — Trillion News Auto Post System
 
-Derived from [SPEC.md](/home/trung/Documents/2026/project/auto-trillion-news-post/SPEC.md)
-and [docs/ARCHITECTURE.md](/home/trung/Documents/2026/project/auto-trillion-news-post/docs/ARCHITECTURE.md).
+Derived from [SPEC.md](/home/trung/Documents/2026/project/auto-trillion-news-post/SPEC.md),
+[docs/ARCHITECTURE.md](/home/trung/Documents/2026/project/auto-trillion-news-post/docs/ARCHITECTURE.md),
+and [docs/decisions/0012-linkedin-only-project-scope.md](/home/trung/Documents/2026/project/auto-trillion-news-post/docs/decisions/0012-linkedin-only-project-scope.md).
 
 ## Position
 
@@ -11,9 +12,9 @@ or marketing team. It is not a SaaS platform and not a multi-tenant service.
 The product serves one end-to-end operating goal:
 
 1. Harvest trillion-related news from search engines.
-2. Generate social drafts for target platforms.
+2. Generate **LinkedIn** drafts with Gemini.
 3. Let the operator review or edit drafts in Excel.
-4. Post only eligible row/platform pairs.
+4. Post only eligible LinkedIn row targets.
 5. Write the posting result back into the workbook.
 
 ## Primary User
@@ -25,67 +26,81 @@ Primary user:
 Working assumptions:
 
 - comfortable with Excel and browser-based workflows
-- can log into social platforms manually when onboarding or refreshing a saved
-  session
+- can log into LinkedIn manually when onboarding or refreshing a saved session
 - prefers local files and visible browser automation over hidden background
   systems
 
 ## Current Baseline
 
-The repo already implements a CLI-centered baseline:
+The repo implements a full local operator baseline:
 
-- `init`
-- `search`
-- `generate`
-- `run`
-- `post`
+- CLI: `init`, `search`, `generate`, `run`, `post`
+- Web UI dashboard with workbook inspection, planner, session onboarding, and
+  manual harvest/generate triggers
+- Local scheduling and run history (`scheduler.db`)
 
-Implemented baseline capabilities:
+Implemented capabilities:
 
 - keyword-based news search with Playwright
 - trillion-related filtering and deduplication
 - screenshot capture for retained news cards
-- Gemini draft generation
+- Gemini LinkedIn draft generation
 - internal 14-column workbook persistence
+- business workbook (`Trillion $ news.xlsx`) ingest, repair, and write-back
 - assisted LinkedIn posting with operator confirmation
+- dashboard filtering that hides workbook rows without a LinkedIn footprint
+- repair flows that prune operator-stray legacy rows and compact empty gaps
 
 These are current product truths and should not be described as hypothetical.
 
-## Target v2
+## Active Scope — LinkedIn Only
 
-The approved v2 direction expands the baseline into two connected pipelines.
+Per decision `0012-linkedin-only-project-scope.md`:
+
+- **Supported platform:** LinkedIn only (draft generation, planning, posting,
+  scheduling, session onboarding).
+- **Fixed default:** config and Web UI do not expose editable multi-platform
+  preferences.
+- **Runtime enforcement:** non-LinkedIn platform requests are rejected
+  explicitly.
+- **Workbook compatibility:** legacy Facebook/X/… columns may still exist in old
+  workbooks as read-only residue. Repair may remove stray rows that have no
+  LinkedIn draft or posting status.
+
+Do not describe other platforms as supported in product copy, UI labels, or new
+feature work unless project scope changes again.
+
+## Pipelines
 
 ### Pipeline A — Harvesting and Draft Generation
 
-Pipeline A should:
+Pipeline A:
 
-- read keywords from file or equivalent operator input
-- search and filter trillion-relevant news
-- capture local screenshots
-- generate 8 platform drafts
-- write title, image reference, and drafts into the business workbook
+- reads keywords from file or equivalent operator input
+- searches and filters trillion-relevant news
+- captures local screenshots
+- generates **LinkedIn** drafts
+- writes title, image reference, and draft into the business workbook
 
 ### Pipeline B — Business Workbook Posting
 
-Pipeline B should:
+Pipeline B:
 
-- read eligible rows from the business workbook
-- honor operator edits made in Excel
-- resolve image sources from local files or Google Drive URLs
-- apply selective posting rules from `Link Post`
-- post to supported platforms with application-managed persistent sessions
-- write back result lines per platform
+- reads eligible rows from the business workbook
+- honors operator edits made in Excel
+- resolves image sources from local files or Google Drive URLs
+- applies selective posting rules from `Link Post` (LinkedIn line only in active
+  scope)
+- posts to LinkedIn with application-managed persistent sessions
+- writes back result lines for LinkedIn
 
 ## Control Surfaces
 
-Required surface today:
+Current surfaces (all share `posting_core` and workbook adapters):
 
 - CLI
-
-Planned surfaces:
-
-- Web UI for non-technical operation and platform-session onboarding
-- Scheduling for local timed runs after the posting core is stable
+- Web UI (`python main.py web`)
+- Local scheduler
 
 Brownfield rule:
 
@@ -98,12 +113,12 @@ Brownfield rule:
 keywords
   -> search and filter news
   -> capture screenshots
-  -> generate 8 drafts
-  -> write drafts into Trillion $ news.xlsx
+  -> generate LinkedIn draft
+  -> write draft into Trillion $ news.xlsx
   -> operator review/edit gate
-  -> select eligible row/platform pairs
-  -> post through platform sessions
-  -> write Link Post results back into Trillion $ news.xlsx
+  -> select eligible LinkedIn rows
+  -> post through LinkedIn session
+  -> write Link Post LinkedIn result back into Trillion $ news.xlsx
 ```
 
 ## Product Boundaries
@@ -112,38 +127,38 @@ In scope:
 
 - local browser-driven operation
 - review-through-Excel workflow
-- selective posting
-- per-platform result visibility
-- default posting limit of 2 eligible rows per platform per run
+- selective LinkedIn posting
+- LinkedIn result visibility in `Link Post`
+- default posting limit of 2 eligible rows per run (LinkedIn)
 
-Out of scope for MVP:
+Out of scope:
 
 - multi-tenant cloud architecture
 - mobile app
 - direct Google Sheets integration
 - complex media editing pipeline
 - captcha bypass or anti-bot evasion
+- supported posting to non-LinkedIn platforms in the current release
 
 ## Capability Status
 
 Implemented now:
 
 - baseline CLI flow
-- local harvesting
-- Gemini generation
-- internal workbook compatibility
-- business workbook ingestion
+- local harvesting and Gemini generation
+- internal and business workbook compatibility
 - `Link Post` parser/writer and safe result write-back
-- shared posting core for LinkedIn, Facebook, and X
-- Web UI operator surface
-- Web UI manual harvest-and-generate trigger with run history visibility
-- local scheduling and run history
-
-Planned next:
-
+- shared posting core with LinkedIn-only runtime enforcement
+- Web UI operator surface (light/dark theme)
 - Web UI session onboarding and reuse
-- later rollout for Instagram, Pinterest, Threads, TikTok, and YouTube
+- local scheduling and run history
+- workbook repair, stray-row pruning, and dashboard row filtering
+
+Inactive / historical (code may remain for workbook safety):
+
+- multi-platform draft generation and posting (Facebook, X, Instagram, etc.)
+- Web UI multi-platform controls
 
 Future only:
 
-- dashboard/history backed by operational storage
+- deeper operational analytics beyond current run history

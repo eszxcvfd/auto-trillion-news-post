@@ -11,27 +11,30 @@ explicit without confusing current implementation with planned capability.
 
 This system is a **local operator tool**, not a SaaS platform.
 
-- Primary operator surface today: CLI
-- Future operator surface: Web UI
+- Operator surfaces today: CLI, Web UI, and local scheduler
 - Runtime model: local execution on an operator-controlled machine
-- Main workflow: harvest news, generate drafts, review in Excel, post to social
-  platforms, write results back into Excel
+- Main workflow: harvest news, generate **LinkedIn** drafts, review in Excel,
+  post to LinkedIn, write results back into Excel
 - Priority: operational stability and recoverability over maximal automation
+- **Active scope:** LinkedIn only per
+  `docs/decisions/0012-linkedin-only-project-scope.md`
 
 Brownfield rule:
 
 - Baseline commands `init`, `search`, `generate`, `run`, and `post` remain the
   compatibility contract unless a later decision explicitly changes them.
-- Web UI, scheduler, and unified 8-platform posting are target capabilities,
-  not baseline capabilities.
+- Web UI and scheduler are implemented surfaces; they must call the same
+  `posting_core` and workbook adapters as the CLI.
+- Historical multi-platform workflow code may remain for workbook safety, but
+  runtime surfaces reject non-LinkedIn requests.
 
 ## Discovery Before Shape
 
 Before adding or reshaping implementation, identify:
 
 - Product surfaces:
-  CLI is required. Web UI is planned. Mobile and desktop app shells are out of
-  scope.
+  CLI, Web UI, and scheduler are implemented. Mobile and desktop app shells are
+  out of scope.
 - Runtime stack:
   Python 3.11+, Playwright, `openpyxl`, local filesystem persistence, and
   Google Gemini.
@@ -64,8 +67,8 @@ Python is the application runtime for:
 - workbook parsing and write-back
 - AI integration with Gemini
 - shared posting orchestration and platform-isolated posting workflows
-- future web backend if a web surface is introduced
-- future scheduling and local job execution if scheduling is introduced
+- Web UI backend (`src/web_ui.py`)
+- scheduling and local job execution (`src/scheduler.py`)
 
 Python should remain the single backend language for the MVP and brownfield
 refactor to avoid splitting business logic across multiple runtimes.
@@ -107,8 +110,8 @@ automation modules.
 Google Gemini is used only for AI draft generation:
 
 - generate English drafts from harvested news inputs
-- produce platform-suitable draft text
-- support the 8-target-platform content generation goal in v2
+- produce LinkedIn-suitable draft text (active scope; seed spec described 8
+  platforms historically)
 
 Gemini is not part of posting automation, session handling, or workbook
 write-back.
@@ -137,8 +140,7 @@ Current source-of-truth model:
 - compatibility truth for the legacy baseline lives in the internal workbook
 - operational artifacts live on the local filesystem
 
-If later releases add scheduling, job history, or dashboard history, a **local
-SQLite database** is the approved direction for:
+A **local SQLite database** (`scheduler.db`) is used for:
 
 - scheduled job definitions
 - run history
@@ -228,8 +230,8 @@ Owns use cases and orchestration logic:
 
 Application code coordinates domain rules and calls infrastructure ports.
 
-Future Web UI session onboarding should call the same application layer rather
-than directly owning browser-session persistence rules.
+Web UI session onboarding calls the same application layer rather than directly
+owning browser-session persistence rules.
 
 ### Infrastructure
 
@@ -239,7 +241,7 @@ Owns concrete integrations:
 - Gemini API client
 - `openpyxl` workbook adapters
 - filesystem storage
-- future SQLite job store
+- SQLite job store (`src/scheduler.py`)
 - logging implementation
 
 Infrastructure satisfies application needs but should not redefine business
@@ -251,8 +253,8 @@ Owns input/output adapters for a chosen surface:
 
 - CLI argument parsing
 - CLI output formatting
-- future web request/response DTOs
-- future web presenters and handlers
+- web request/response DTOs (`src/web_ui.py`)
+- web presenters and handlers
 
 Interface translates surface input into application commands and translates
 application results back into operator-facing output.
@@ -261,8 +263,8 @@ application results back into operator-facing output.
 
 Owns the user-facing shell:
 
-- current CLI surface
-- future web UI surface
+- CLI surface (`main.py`)
+- Web UI surface (`src/web_ui.py`, `src/templates/index.html`)
 
 Surfaces should remain thin and should not directly implement posting logic,
 workbook rules, or provider-specific decision logic.
@@ -363,14 +365,15 @@ Current brownfield mapping:
 
 ## Platform-Isolated Posting Workflows
 
-Pipeline B posting now separates shared orchestration from platform-owned
+Pipeline B posting separates shared orchestration from platform-owned
 automation:
 
 ```text
-workbook row + platform target
+workbook row + LinkedIn target
   -> posting_core eligibility and plan generation
-  -> platform_workflows registry dispatch
-  -> platform-owned browser workflow
+  -> platform_capabilities LinkedIn-only scope check
+  -> platform_workflows registry dispatch (LinkedIn workflow)
+  -> LinkedIn browser workflow
   -> shared writeback into Link Post
   -> scheduler run history with workflow_id attribution
 ```
@@ -378,6 +381,20 @@ workbook row + platform target
 Shared responsibilities stay in `posting_core`, workbook adapters, and
 write-back. Platform workflows own browser steps, session checks, media
 handling, composer preparation, and provider-specific failure mapping.
+
+**Active scope:** only the LinkedIn workflow is dispatchable from runtime
+surfaces. Non-LinkedIn registry entries may remain for compatibility but are
+rejected at the capability boundary.
+
+## Workbook Dashboard and Repair
+
+Business workbook rows are filtered before dashboard display:
+
+- `filter_dashboard_workbook_rows()` hides rows without a LinkedIn draft or
+  LinkedIn `Link Post` footprint
+- `repair_broken_draft_references()` may prune operator-stray legacy rows,
+  clear broken draft refs, trim non-LinkedIn `Link Post` residue, and compact
+  empty row gaps so Excel row indices stay contiguous for operators
 
 ## Dependency Rule
 

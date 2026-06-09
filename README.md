@@ -1,230 +1,158 @@
-# repository-harness
+# Trillion News Auto Post System
 
-Turn any software repo into an agent-ready workspace.
+Local operator tool for harvesting trillion-related news, generating **LinkedIn**
+drafts with Gemini, reviewing content in Excel, and posting through assisted
+Playwright browser automation.
 
-`repository-harness` is a repository-level operating harness for Claude Code,
-Codex, Cursor, and other coding agents. It gives agents the missing project
-context they need before they change code: where to start, what the product
-contract says, how risky the work is, what proof is required, and which
-decisions future agents should inherit.
+This is not SaaS. It runs on an operator-controlled machine. Business truth lives
+in `Trillion $ news.xlsx`; scheduling and run history use local SQLite
+(`scheduler.db`).
 
-The app is what users touch. The harness is what agents touch.
-
-## Why Star This Repo
-
-Star this repo if you want practical, reusable patterns for making AI-assisted
-software development more reliable, inspectable, and easier for humans to steer.
-
-This project is exploring a simple idea:
-
-> Coding agents do not only need better prompts. They need better repositories.
-
-## The Problem
-
-Most repos are built for humans reading code in a familiar codebase. Coding
-agents usually enter with only a chat prompt and a shallow snapshot of files.
-That leads to common failure modes:
-
-- The agent edits code before understanding product intent.
-- Important constraints live only in chat history or in someone's head.
-- Validation expectations are vague or discovered too late.
-- Architecture tradeoffs are repeated instead of inherited.
-- Large requests do not get broken into reviewable story-sized work.
-
-## The Harness Approach
-
-A repository starts to have a harness when it helps an agent answer practical
-engineering questions without relying only on chat history:
-
-- What should I read first?
-- What type of work is this?
-- Which product contract does it affect?
-- How risky is the change?
-- What proof will show the work is done?
-- What decision or lesson should future agents inherit?
-
-In this repo, those answers live in:
-
-- `AGENTS.md` — the stable agent shim with local project notes and Harness
-  doc links.
-- `docs/HARNESS.md` — the human-agent collaboration model.
-- `docs/FEATURE_INTAKE.md` — tiny, normal, and high-risk work classification.
-- `docs/ARCHITECTURE.md` — architecture discovery and boundary rules.
-- `docs/TEST_MATRIX.md` — behavior-to-proof validation expectations.
-- `docs/stories/` — story packets and backlog items.
-- `docs/decisions/` — durable decisions and tradeoffs.
-- `docs/templates/` — reusable spec, story, decision, and validation templates.
-
-OpenAI describes this shift as an agent-first world where humans steer and
-agents execute:
-
-https://openai.com/index/harness-engineering/
-
-## Install Harness Into A Project
-
-From a target project directory, run:
-
-```bash
-curl -fsSL "https://raw.githubusercontent.com/hoangnb24/repository-harness/main/scripts/install-harness.sh?$(date +%s)" | bash -s -- --yes
-```
-
-On Windows PowerShell, run:
-
-```powershell
-& ([scriptblock]::Create((irm "https://raw.githubusercontent.com/hoangnb24/repository-harness/main/scripts/install-harness.ps1"))) -Yes
-```
-
-If the target already has `AGENTS.md`, `docs/`, or `scripts/`, choose one:
-
-```bash
-# Update an existing Harness repo without moving existing files
-curl -fsSL "https://raw.githubusercontent.com/hoangnb24/repository-harness/main/scripts/install-harness.sh?$(date +%s)" | bash -s -- --merge --yes
-
-# Back up and replace AGENTS.md, docs/, and scripts/
-curl -fsSL "https://raw.githubusercontent.com/hoangnb24/repository-harness/main/scripts/install-harness.sh?$(date +%s)" | bash -s -- --override --yes
-```
-
-```powershell
-# Update an existing Harness repo without moving existing files
-& ([scriptblock]::Create((irm "https://raw.githubusercontent.com/hoangnb24/repository-harness/main/scripts/install-harness.ps1"))) -Merge -Yes
-
-# Back up and replace AGENTS.md, docs/, and scripts/
-& ([scriptblock]::Create((irm "https://raw.githubusercontent.com/hoangnb24/repository-harness/main/scripts/install-harness.ps1"))) -Override -Yes
-```
-
-Use `--merge` when a project already has Harness and you want to append newly
-added Harness files without moving the existing `AGENTS.md`, `docs/`, or
-`scripts/` paths into backup. Existing files stay untouched; only missing
-Harness files are created.
-
-For older Harness installs whose `AGENTS.md` still contains the full generated
-operating guide, refresh it into the small stable shim:
-
-```bash
-curl -fsSL "https://raw.githubusercontent.com/hoangnb24/repository-harness/main/scripts/install-harness.sh?$(date +%s)" | bash -s -- --merge --refresh-agent-shim --yes
-```
-
-The refresh backs up the existing file. If it detects the old
-Harness-generated guide, it replaces it with the shim. If the file appears
-custom, it appends or updates a marked Harness block instead of overwriting the
-project's local instructions.
-
-Or install into a specific path:
-
-```bash
-curl -fsSL "https://raw.githubusercontent.com/hoangnb24/repository-harness/main/scripts/install-harness.sh?$(date +%s)" | bash -s -- --directory /path/to/project --yes
-```
-
-```powershell
-& ([scriptblock]::Create((irm "https://raw.githubusercontent.com/hoangnb24/repository-harness/main/scripts/install-harness.ps1"))) -Directory C:\path\to\project -Yes
-```
-
-Use `--dry-run` on Bash or `-DryRun` on PowerShell to preview changes before
-writing files.
-
-The installer also downloads the prebuilt Harness CLI for the current platform,
-verifies its `.sha256` checksum, and installs it at
-`scripts/bin/harness-cli` on macOS/Linux or `scripts/bin/harness-cli.exe` on
-Windows. The Rust CLI is the main Harness tool and stable command path.
-
-Harness CLI release assets are published from tags by the
-`Harness CLI Release` GitHub Actions workflow. The installer expects each
-release to include `harness-cli-<platform>` and
-`harness-cli-<platform>.sha256` assets for macOS arm64, macOS x64, Linux x64,
-Linux arm64, and Windows x64. The Windows asset is
-`harness-cli-windows-x64.exe` plus `harness-cli-windows-x64.exe.sha256`.
-
-## Try The Flow
-
-The fastest way to understand the harness is to inspect the tiny demo:
-
-- `docs/demo/README.md`: shows how a simple product idea becomes product docs,
-  stories, validation expectations, and decisions before implementation starts.
-
-A typical flow looks like this:
+## What It Does
 
 ```text
-human intent or product spec
-  -> product contract
-  -> feature intake
-  -> story packet
-  -> validation expectations
-  -> implementation work
-  -> decision or lesson captured for future agents
+keywords
+  -> search & filter trillion news (Playwright)
+  -> capture screenshots
+  -> generate LinkedIn draft (Gemini)
+  -> write into Trillion $ news.xlsx
+  -> operator reviews/edits in Excel
+  -> post eligible rows to LinkedIn
+  -> write Link Post result back to workbook
 ```
 
-Implementation prompts do not go straight to code. They first pass through
-feature intake, become story-sized work when needed, and then carry both product
-validation and harness maintenance expectations.
+**Current scope:** LinkedIn only. Legacy workbook columns for other platforms may
+still exist as read-only residue; runtime paths reject non-LinkedIn requests.
+See `docs/decisions/0012-linkedin-only-project-scope.md`.
 
-## Current State
+## Requirements
 
-This repository is in Harness v0.
+- Python 3.11+
+- Google Gemini API key
+- Playwright browsers (`playwright install` after pip install)
+- A logged-in LinkedIn session (onboarded via Web UI or CLI-assisted flow)
 
-There is no application implementation and no baked-in product specification
-yet. The current work is the reusable project harness: the file structure,
-agent operating model, feature intake process, story templates, and validation
-expectations that help humans and agents turn a future user-provided spec into
-implementation work.
+## Quick Start
 
-## Product Sources
+```bash
+python -m venv .venv
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+playwright install chromium
 
-No product contract is currently defined.
+cp .env.example .env        # set GEMINI_API_KEY
+python main.py init
+python main.py web --port 8080
+```
 
-When a user provides a project specification, add or reference it as the input
-spec for the first buildout, then derive smaller living artifacts from it:
+Open `http://127.0.0.1:8080` for the operator dashboard (light/dark theme toggle
+in the header).
 
-- `docs/product/`: current product contract files, created from the spec.
-- `docs/stories/`: story packets and backlog created from selected work.
-- `docs/TEST_MATRIX.md`: behavior-to-proof control panel.
-- `docs/decisions/`: durable decisions and tradeoffs.
+First-time setup through the Web UI:
 
-Do not keep a project-specific spec or product breakdown in this harness until
-a real project supplies one.
+1. Confirm workbook path (`output/Trillion $ news.xlsx` by default).
+2. Onboard LinkedIn session (browser login, then save session).
+3. Run **Harvest & Generate** or use CLI `search` / `generate` / `run`.
+4. Review drafts in Excel, then post from the dashboard or CLI.
 
-## Repository Structure
+## Configuration
+
+Paths and secrets are set in `.env` (see `.env.example`):
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `GEMINI_API_KEY` | — | Gemini draft generation |
+| `EXCEL_FILE` | `./output/Trillion $ news.xlsx` | Business workbook |
+| `IMAGE_DIR` | `./output/Ảnh Trillion $ news` | Screenshot storage |
+| `POST_DIR` | `./output/posts` | Generated draft files |
+| `HEADLESS` | `false` | Browser visibility for search/post |
+| `MAX_POSTS_PER_RUN` | `5` | Posting cap per run |
+
+Search filters, hashtags, and posting behavior are in `config.yaml`. Keywords
+live in `keywords.txt` (created by `init` if missing).
+
+`DEFAULT_PLATFORM` is fixed to LinkedIn; it is not an editable multi-platform
+preference.
+
+## CLI Commands
+
+```bash
+python main.py init              # create output dirs, .env, config, keywords
+python main.py search            # harvest news from keywords.txt
+python main.py generate          # generate LinkedIn drafts for harvested items
+python main.py run               # search + generate in one step
+python main.py post              # assisted LinkedIn posting from workbook
+python main.py inspect-workbook  # validate workbook rows and eligibility
+python main.py web --port 8080   # operator dashboard
+```
+
+### Scheduling
+
+```bash
+python main.py schedule add --name "Morning post" \
+  --expression "0 9 * * *" --job-type post --limit 2
+
+python main.py schedule list
+python main.py schedule run-now --id 1
+python main.py schedule history
+```
+
+## Web UI
+
+The dashboard covers the full operator loop without using the CLI directly:
+
+- Workbook inspection per sheet (rows with LinkedIn footprint only)
+- Posting planner and eligibility preview
+- Manual harvest & generate with run history
+- LinkedIn session onboarding and status
+- Assisted posting with operator confirmation
+- Light/dark theme (saved in browser `localStorage`)
+
+## Workbook
+
+The operator-facing file is `Trillion $ news.xlsx` (Contract B). Active columns
+for the current release:
+
+- `#`, `Trillion $ news Title`, `Image link`, `Linkedin`, `Link Post`
+
+`Link Post` stores per-platform result lines; only the LinkedIn line is active
+in scope. The app can repair broken draft references, remove legacy stray rows
+(title/image only, no LinkedIn draft), and compact empty row gaps so Excel row
+counts match the dashboard.
+
+Run repair from the Web UI or CLI when workbook and dashboard counts diverge.
+
+## Project Layout
 
 ```text
-project/
-  AGENTS.md
-  README.md
-  docs/
-    HARNESS.md
-    FEATURE_INTAKE.md
-    ARCHITECTURE.md
-    TEST_MATRIX.md
-    HARNESS_BACKLOG.md
-    product/
-    stories/
-    decisions/
-    demo/
-    templates/
-  scripts/
-    README.md
+main.py                 # CLI entry
+config.yaml             # search, hashtags, posting defaults
+keywords.txt            # harvest keywords
+src/
+  business_workbook.py  # ingest, save, repair, dashboard filter
+  posting_core.py       # eligibility, Link Post, posting plan
+  web_ui.py             # Flask dashboard API
+  templates/index.html  # operator UI
+  assisted_posting.py   # Playwright LinkedIn posting
+  scheduler.py          # local schedules + run history
+output/
+  Trillion $ news.xlsx  # business workbook (default)
+  Ảnh Trillion $ news/    # screenshots
+  posts/                # draft markdown files
+tests/                  # pytest suite
+docs/                   # product contract, architecture, decisions
 ```
 
-## Contributing
+## Development
 
-This project is early and benefits most from real-world agent failure cases,
-example harness installs, docs improvements, and reusable workflow patterns.
-See `CONTRIBUTING.md` for contribution ideas.
+```bash
+source .venv/bin/activate
+python -m pytest tests/
+```
 
-Useful contributions include:
+Key docs before changing behavior:
 
-- Show how the harness works in a real project.
-- Add missing templates or improve existing ones.
-- Propose validation patterns for different stacks.
-- Share failures where an agent made the wrong change because the repo lacked
-  context.
-- Compare harness behavior across Claude Code, Codex, Cursor, and other tools.
-
-## Share
-
-If this idea resonates, please star the repo and share it with someone building
-with coding agents.
-
-Short description:
-
-> An agent-ready repo harness for Claude Code, Codex, Cursor, and other coding
-> agents: AGENTS.md, product contracts, story packets, validation matrix, and
-> decision records.
+- `docs/product/overview.md` — current product position
+- `docs/product/workbook-contracts.md` — workbook rules
+- `docs/ARCHITECTURE.md` — layering and boundaries
+- `AGENTS.md` — agent/contributor entrypoint

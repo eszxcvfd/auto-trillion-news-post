@@ -1,9 +1,24 @@
 # Workbook Contracts
 
-Derived from [SPEC.md](/home/trung/Documents/2026/project/auto-trillion-news-post/SPEC.md).
+Derived from [SPEC.md](/home/trung/Documents/2026/project/auto-trillion-news-post/SPEC.md)
+and [docs/decisions/0012-linkedin-only-project-scope.md](/home/trung/Documents/2026/project/auto-trillion-news-post/docs/decisions/0012-linkedin-only-project-scope.md).
 
 This project has two workbook contracts. They must remain explicit during
 brownfield refactor.
+
+## LinkedIn-Only Active Scope
+
+Per decision `0012`, the **active** business workbook columns for draft review
+and posting are:
+
+- `#`, `Trillion $ news Title`, `Image link`, `Linkedin`, `Link Post`
+
+Columns for Facebook, X, Instagram, Pinterest, Threads, TikTok, and YouTube may
+still exist in legacy workbooks. They are read-only residue — not supported for
+new draft generation or posting in the current release.
+
+Runtime and UI surfaces scope `Link Post` display and write-back to the LinkedIn
+line when presenting operator-facing status.
 
 ## Contract A — Internal Compatibility Workbook
 
@@ -141,5 +156,19 @@ the image download flow.
 
 If the image cannot be resolved:
 
-- text-optional platforms may continue text-only
-- image-required platforms must record an explicit error
+- LinkedIn may continue text-only when the operator draft allows it
+- otherwise record an explicit error in `Link Post`
+
+## Operator-Stray Rows and Repair
+
+Legacy workbooks may contain rows that appear in high Excel row indices after
+empty gaps, or rows with only title/image and no LinkedIn draft. These are
+**operator-stray** rows from the pre-LinkedIn-only era.
+
+Behavior:
+
+- the Web UI dashboard hides rows without a LinkedIn footprint
+- `repair_broken_draft_references()` may remove stray rows, clear broken draft
+  file references, and compact empty gaps so new rows append contiguously
+- operators should run repair after manual Excel cleanup when row counts look
+  inconsistent between Excel and the dashboard
