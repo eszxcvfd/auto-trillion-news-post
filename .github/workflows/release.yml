@@ -105,7 +105,7 @@ jobs:
             artifacts/linux/*
             artifacts/win/*
           body: |
-            ## Trillion News Post Desktop v${{ github.ref_name }}
+            ## Trillion News Post Desktop ${{ github.ref_name }}
 
             Electron operator shell bundling the local Flask Web UI and Python backend.
 
