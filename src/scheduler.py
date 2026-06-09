@@ -13,6 +13,20 @@ from src.business_workbook import ingest_business_workbook
 from src.posting_core import build_posting_plan, canonicalize_platform, PLATFORM_ATTRS
 from src.writeback import write_post_result
 from src.assisted_posting import run_assisted_posting
+from src.platform_workflows.registry import get_workflow_id
+
+def _persist_run_details(cursor, run_id: str, row_details: List[Tuple]) -> None:
+    """Insert run detail rows, optionally including workflow_id as the 6th tuple value."""
+    for details in row_details:
+        workflow_id = details[5] if len(details) > 5 else None
+        cursor.execute(
+            """
+            INSERT INTO run_details (run_id, sheet_name, row_id, platform, status, message, workflow_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (run_id, details[0], details[1], details[2], details[3], details[4], workflow_id),
+        )
+
 
 def get_db_connection(db_path: str) -> sqlite3.Connection:
     conn = sqlite3.connect(db_path)
@@ -68,9 +82,15 @@ def init_db(db_path: str):
         platform TEXT NOT NULL,
         status TEXT NOT NULL,              -- "success", "skip", "error", "login-required"
         message TEXT,
+        workflow_id TEXT,
         FOREIGN KEY(run_id) REFERENCES runs(run_id) ON DELETE CASCADE
     )
     """)
+
+    # Backfill workflow_id column for existing databases.
+    detail_columns = {row[1] for row in c.execute("PRAGMA table_info(run_details)")}
+    if "workflow_id" not in detail_columns:
+        c.execute("ALTER TABLE run_details ADD COLUMN workflow_id TEXT")
     
     # Platform Sessions Table (session operational status & metadata)
     c.execute("""
@@ -490,11 +510,7 @@ def run_manual_draft_job(
     WHERE run_id = ?
     """, (status, finished_at, summary, error_msg, run_id))
 
-    for details in row_details:
-        c.execute("""
-        INSERT INTO run_details (run_id, sheet_name, row_id, platform, status, message)
-        VALUES (?, ?, ?, ?, ?, ?)
-        """, (run_id, details[0], details[1], details[2], details[3], details[4]))
+    _persist_run_details(c, run_id, row_details)
 
     conn.commit()
     conn.close()
@@ -674,8 +690,12 @@ def run_schedule_job(db_path: str, schedule_id: int, trigger_type: str, config: 
                 
                 # Execute each candidate
                 for platform_name, candidates in plan.candidates.items():
+                    workflow_id = get_workflow_id(platform_name)
                     for c_idx, cand in enumerate(candidates):
-                        print(f"[SCHEDULER] Posting candidate {c_idx+1}/{len(candidates)} on '{platform_name}' (ID: {cand.id})")
+                        print(
+                            f"[SCHEDULER] Posting candidate {c_idx+1}/{len(candidates)} "
+                            f"on '{platform_name}' via {workflow_id} (ID: {cand.id})"
+                        )
                         
                         # Set up thread coordinator for operator confirmation with 5-minute timeout
                         global scheduler_active_job
@@ -723,18 +743,46 @@ def run_schedule_job(db_path: str, schedule_id: int, trigger_type: str, config: 
                             if post_success:
                                 url_val = getattr(item, "post_url", "").strip() or "[posted-no-link]"
                                 write_post_result(excel_path, cand.sheet_name, cand.row_idx, platform_name, url_val, backup_enabled=config.backup_enabled)
-                                row_details.append((cand.sheet_name, cand.id, platform_name, "success", f"Posted successfully. URL: {url_val}"))
+                                row_details.append((
+                                    cand.sheet_name,
+                                    cand.id,
+                                    platform_name,
+                                    "success",
+                                    f"Posted successfully. URL: {url_val}",
+                                    workflow_id,
+                                ))
                                 success_count += 1
                             else:
                                 if job.action_type == "skip":
                                     write_post_result(excel_path, cand.sheet_name, cand.row_idx, platform_name, "[skip] skipped by operator", backup_enabled=config.backup_enabled)
-                                    row_details.append((cand.sheet_name, cand.id, platform_name, "skip", "Skipped by operator action"))
+                                    row_details.append((
+                                        cand.sheet_name,
+                                        cand.id,
+                                        platform_name,
+                                        "skip",
+                                        "Skipped by operator action",
+                                        workflow_id,
+                                    ))
                                 else:
                                     err_text = job.error_message or "Post not published or timeout."
-                                    row_details.append((cand.sheet_name, cand.id, platform_name, "error", err_text))
+                                    row_details.append((
+                                        cand.sheet_name,
+                                        cand.id,
+                                        platform_name,
+                                        "error",
+                                        err_text,
+                                        workflow_id,
+                                    ))
                                     error_count += 1
                         except Exception as ex:
-                            row_details.append((cand.sheet_name, cand.id, platform_name, "error", str(ex)))
+                            row_details.append((
+                                cand.sheet_name,
+                                cand.id,
+                                platform_name,
+                                "error",
+                                str(ex),
+                                workflow_id,
+                            ))
                             error_count += 1
                             
                         # Clear active job once it reaches a terminal state
@@ -767,13 +815,8 @@ def run_schedule_job(db_path: str, schedule_id: int, trigger_type: str, config: 
     WHERE run_id = ?
     """, (status, finished_at, summary, error_msg, run_id))
     
-    # Insert details
-    for details in row_details:
-        c.execute("""
-        INSERT INTO run_details (run_id, sheet_name, row_id, platform, status, message)
-        VALUES (?, ?, ?, ?, ?, ?)
-        """, (run_id, details[0], details[1], details[2], details[3], details[4]))
-        
+    _persist_run_details(c, run_id, row_details)
+
     conn.commit()
     conn.close()
 
