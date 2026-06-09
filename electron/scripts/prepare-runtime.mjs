@@ -28,11 +28,12 @@ function run(command, args, options = {}) {
   }
 }
 
-function pythonBin(name) {
+function pythonBin(name = 'python3') {
   if (process.platform === 'win32') {
-    return path.join(venvDir, `${name}.exe`);
+    return path.join(venvDir, 'python.exe');
   }
-  return path.join(venvDir, 'bin', name);
+  const binName = name === 'python' ? 'python3' : name;
+  return path.join(venvDir, 'bin', binName);
 }
 
 function standaloneArchiveUrl() {
@@ -79,11 +80,8 @@ function main() {
   extractStandalonePython();
   fs.rmSync(archivePath, { force: true });
 
-  const python = pythonBin('python3');
-  if (!fs.existsSync(python) && process.platform === 'win32') {
-    throw new Error(`Standalone Python missing at ${python}`);
-  }
-  if (!fs.existsSync(python) && process.platform !== 'win32') {
+  const python = pythonBin();
+  if (!fs.existsSync(python)) {
     throw new Error(`Standalone Python missing at ${python}`);
   }
 
