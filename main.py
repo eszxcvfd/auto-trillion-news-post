@@ -135,17 +135,13 @@ def init_project():
     print("Project initialization complete.")
 
 def load_keywords(filepath: str) -> list[str]:
-    if not os.path.exists(filepath):
-        print(f"[ERROR] Keywords file '{filepath}' does not exist.")
+    from src.keywords_store import load_active_keywords, resolve_keywords_path
+
+    path = resolve_keywords_path(filepath)
+    if not os.path.exists(path):
+        print(f"[ERROR] Keywords file '{path}' does not exist.")
         return []
-    keywords = []
-    with open(filepath, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            keywords.append(line)
-    return keywords
+    return load_active_keywords(path)
 
 def execute_search(keywords_path: str, limit: int = None):
     if search_sync_playwright is None:
