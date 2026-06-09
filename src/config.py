@@ -2,6 +2,8 @@ import os
 import shutil
 import yaml
 
+from src.env_settings_store import resolve_env_path
+
 def load_dotenv(path=".env"):
     if not os.path.exists(path):
         return
@@ -15,9 +17,10 @@ def load_dotenv(path=".env"):
                 os.environ[key.strip()] = val.strip()
 
 class AppConfig:
-    def __init__(self, env_path=".env", yaml_path="config.yaml"):
+    def __init__(self, env_path=None, yaml_path="config.yaml"):
         # Load environment variables first
-        load_dotenv(env_path)
+        resolved_env_path = env_path or resolve_env_path()
+        load_dotenv(resolved_env_path)
         
         self.yaml_config = {}
         if os.path.exists(yaml_path):

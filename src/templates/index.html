@@ -234,10 +234,19 @@
     }
 
     .sidebar-footer {
-      padding: 14px 16px;
+      padding: 10px 10px 14px;
       border-top: 1px solid var(--border-color);
       font-size: 0.75rem;
       color: var(--text-muted);
+    }
+
+    .sidebar-footer .menu-item {
+      width: 100%;
+      margin-bottom: 10px;
+      border: none;
+      background: transparent;
+      text-align: left;
+      font: inherit;
     }
 
     .main-container {
@@ -1142,8 +1151,12 @@
     </ul>
     
     <div class="sidebar-footer">
-      <div>Local Operator Surface</div>
-      <div style="margin-top: 4px; font-weight: 600;">Active Session: Local</div>
+      <button type="button" class="menu-item" onclick="switchView('settings')">
+        <svg viewBox="0 0 24 24"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>
+        Settings
+      </button>
+      <div style="padding: 0 6px;">Local Operator Surface</div>
+      <div style="margin-top: 4px; font-weight: 600; padding: 0 6px;">Active Session: Local</div>
     </div>
   </div>
 
@@ -1508,6 +1521,44 @@
         </div>
       </div>
 
+      <!-- Settings View -->
+      <div id="view-settings" class="view">
+        <div style="display:grid; grid-template-columns: 1.6fr 1fr; gap: 24px;">
+          <div class="card">
+            <div class="card-title" style="flex-wrap:wrap; gap:8px;">
+              <span>Environment Settings</span>
+              <span id="settings-env-path" style="margin-left:auto; font-size:0.75rem; color:var(--text-muted); font-weight:400;"></span>
+            </div>
+            <p style="color:var(--text-muted); line-height:1.6; margin-bottom:20px;">
+              Edit the operator <code>.env</code> file used by CLI, Web UI, and scheduled jobs.
+              Values are loaded directly from disk, including the Gemini API key.
+            </p>
+
+            <form id="settings-form" onsubmit="saveSettings(event)">
+              <div id="settings-sections">
+                <div style="color:var(--text-muted); padding:24px 0;">Loading settings…</div>
+              </div>
+
+              <div style="display:flex; gap:12px; flex-wrap:wrap; margin-top:20px;">
+                <button type="submit" class="btn btn-primary">Save Settings</button>
+                <button type="button" class="btn" onclick="loadSettings()">Reload</button>
+              </div>
+              <div id="settings-status" style="margin-top:12px; font-size:0.8rem; color:var(--text-muted);"></div>
+            </form>
+          </div>
+
+          <div class="card">
+            <div class="card-title">Notes</div>
+            <ul style="margin-left:20px; color:var(--text-muted); line-height:1.7;">
+              <li>Changes are written to <code id="settings-env-path-note">.env</code> immediately on save.</li>
+              <li>Path and output folders also appear under <strong>System Config</strong> after reload.</li>
+              <li>LinkedIn remains the only supported publishing platform for this project.</li>
+              <li>Restart the Web UI if a running process does not pick up path changes right away.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
       <!-- Config View -->
       <div id="view-config" class="view">
         <div class="card">
@@ -1860,6 +1911,8 @@
         loadLatestDraftRun();
       } else if (viewName === 'sessions') {
         loadSessionsStatus();
+      } else if (viewName === 'settings') {
+        loadSettings();
       } else if (viewName === 'config') {
         loadConfig();
         loadWorkbooksList();
@@ -1906,6 +1959,149 @@
         toast.style.animation = 'slideIn 0.3s ease reverse forwards';
         setTimeout(() => toast.remove(), 300);
       }, 4000);
+    }
+
+    const SETTINGS_FIELD_LABELS = {
+      GEMINI_API_KEY: 'Gemini API Key',
+      AI_PROVIDER: 'AI Provider',
+      AI_MODEL: 'AI Model',
+      SEARCH_PROVIDER: 'Search Provider',
+      HEADLESS: 'Headless Browser',
+      OUTPUT_DIR: 'Output Directory',
+      EXCEL_FILE: 'Excel Workbook Path',
+      BACKUP_ENABLED: 'Workbook Backup',
+      IMAGE_DIR: 'Image Directory',
+      POST_DIR: 'Post Draft Directory',
+      LOG_DIR: 'Log Directory',
+      DEFAULT_LANGUAGE: 'Default Language',
+      MAX_RESULTS_PER_KEYWORD: 'Max Results per Keyword',
+      MAX_POSTS_PER_RUN: 'Max Posts per Run',
+    };
+
+    let settingsSnapshot = null;
+
+    function renderSettingsForm(data) {
+      settingsSnapshot = data;
+      const container = document.getElementById('settings-sections');
+      const pathLabel = document.getElementById('settings-env-path');
+      const pathNote = document.getElementById('settings-env-path-note');
+      if (!container) return;
+
+      if (pathLabel) pathLabel.textContent = data.env_path || '';
+      if (pathNote) pathNote.textContent = data.env_path || '.env';
+
+      if (!data.sections || !data.sections.length) {
+        container.innerHTML = '<div style="color:var(--text-muted);">No settings available.</div>';
+        return;
+      }
+
+      container.innerHTML = data.sections.map(section => {
+        const fields = (section.fields || []).map(field => {
+          const label = SETTINGS_FIELD_LABELS[field.key] || field.key;
+          const inputId = `settings-${field.key}`;
+          let control = '';
+
+          if (field.type === 'boolean') {
+            const checked = String(field.value).toLowerCase() === 'true';
+            control = `
+              <select id="${inputId}" class="form-control" data-setting-key="${field.key}">
+                <option value="false" ${checked ? '' : 'selected'}>false</option>
+                <option value="true" ${checked ? 'selected' : ''}>true</option>
+              </select>`;
+          } else if (field.type === 'select' && field.options) {
+            control = `
+              <select id="${inputId}" class="form-control" data-setting-key="${field.key}">
+                ${field.options.map(option => {
+                  const selected = String(field.value).toLowerCase() === option ? 'selected' : '';
+                  return `<option value="${option}" ${selected}>${option}</option>`;
+                }).join('')}
+              </select>`;
+          } else if (field.type === 'integer') {
+            control = `
+              <input type="number" min="1" step="1" id="${inputId}" class="form-control" data-setting-key="${field.key}"
+                value="${field.value ?? ''}">`;
+          } else {
+            const monoStyle = field.key === 'GEMINI_API_KEY' ? 'font-family:monospace; font-size:0.85rem;' : '';
+            control = `
+              <input type="text" id="${inputId}" class="form-control" data-setting-key="${field.key}"
+                style="${monoStyle}" value="${String(field.value ?? '').replace(/"/g, '&quot;')}">`;
+          }
+
+          return `
+            <div class="form-group">
+              <label for="${inputId}">${label}</label>
+              ${control}
+            </div>`;
+        }).join('');
+
+        return `
+          <div class="settings-section" style="margin-bottom:24px;">
+            <div style="font-size:0.8rem; font-weight:700; letter-spacing:0.04em; text-transform:uppercase; color:var(--text-muted); margin-bottom:12px;">
+              ${section.title}
+            </div>
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px 16px;">
+              ${fields}
+            </div>
+          </div>`;
+      }).join('');
+    }
+
+    function collectSettingsPayload() {
+      const payload = {};
+      document.querySelectorAll('[data-setting-key]').forEach(el => {
+        const key = el.getAttribute('data-setting-key');
+        if (!key) return;
+        payload[key] = el.value;
+      });
+      return payload;
+    }
+
+    function loadSettings() {
+      const status = document.getElementById('settings-status');
+      const container = document.getElementById('settings-sections');
+      if (container) {
+        container.innerHTML = '<div style="color:var(--text-muted); padding:24px 0;">Loading settings…</div>';
+      }
+      if (status) status.textContent = '';
+
+      fetch('/api/settings')
+        .then(res => res.json().then(data => ({ ok: res.ok, data })))
+        .then(({ ok, data }) => {
+          if (!ok) throw new Error(data.error || 'Failed to load settings');
+          renderSettingsForm(data);
+        })
+        .catch(err => {
+          if (container) {
+            container.innerHTML = '<div style="color:var(--status-error);">Failed to load settings.</div>';
+          }
+          showToast(err.message || 'Failed to load settings', 'error');
+        });
+    }
+
+    function saveSettings(event) {
+      event.preventDefault();
+      const status = document.getElementById('settings-status');
+      const payload = collectSettingsPayload();
+
+      if (status) status.textContent = 'Saving…';
+
+      fetch('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ settings: payload }),
+      })
+        .then(res => res.json().then(data => ({ ok: res.ok, data })))
+        .then(({ ok, data }) => {
+          if (!ok) throw new Error(data.error || 'Failed to save settings');
+          renderSettingsForm(data);
+          if (status) status.textContent = data.message || 'Settings saved.';
+          showToast('Settings saved');
+          loadConfig();
+        })
+        .catch(err => {
+          if (status) status.textContent = '';
+          showToast(err.message || 'Failed to save settings', 'error');
+        });
     }
 
     // Config APIs

@@ -67,6 +67,7 @@ function ensureOperatorEnv() {
 
   const env = {
     ...process.env,
+    ENV_FILE: envPath,
     OUTPUT_DIR: outputDir,
     EXCEL_FILE: path.join(outputDir, 'Trillion $ news.xlsx'),
     IMAGE_DIR: path.join(outputDir, 'Ảnh Trillion $ news'),

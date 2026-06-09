@@ -26,6 +26,7 @@ HEADLESS=false
 # Output Configuration
 OUTPUT_DIR=./output
 EXCEL_FILE=./output/Trillion $ news.xlsx
+BACKUP_ENABLED=false
 IMAGE_DIR=./output/Ảnh Trillion $ news
 POST_DIR=./output/posts
 LOG_DIR=./output/logs

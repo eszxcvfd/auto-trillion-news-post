@@ -7,7 +7,8 @@ import datetime
 from typing import Dict, Any, Optional
 from flask import Flask, jsonify, request, send_from_directory, render_template
 
-from src.config import AppConfig
+from src.config import AppConfig, load_dotenv
+from src.env_settings_store import read_env_settings, resolve_env_path, save_env_settings
 from src.models import NewsItem
 from src.business_workbook import (
     delete_workbook_row,
@@ -175,6 +176,30 @@ def get_config():
         "supported_platforms": [PROJECT_DEFAULT_PLATFORM],
         "platform_locked": True,
     })
+
+@app.route('/api/settings', methods=['GET'])
+def get_settings():
+    """Return operator-editable .env settings."""
+    return jsonify(read_env_settings())
+
+
+@app.route('/api/settings', methods=['PUT'])
+def update_settings():
+    """Persist operator settings to the active .env file."""
+    data = request.json or {}
+    payload = data.get("settings", data)
+    try:
+        saved = save_env_settings(payload)
+        load_dotenv(resolve_env_path())
+        return jsonify({
+            **saved,
+            "message": "Settings saved. Some changes apply on the next action or restart.",
+        })
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except OSError as exc:
+        return jsonify({"error": f"Failed to write settings: {exc}"}), 500
+
 
 @app.route('/api/config/workbook', methods=['POST'])
 def update_workbook():

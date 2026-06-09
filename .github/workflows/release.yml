@@ -116,7 +116,7 @@ jobs:
             ### First launch
             1. Install and open the desktop app.
             2. Operator data is stored under the app user-data directory (`output/`, `.env`).
-            3. Edit `.env` in user-data folder and set `GEMINI_API_KEY` before harvest/generate.
+            3. Open **Settings** in the Web UI footer (or edit `.env` in user-data) and set `GEMINI_API_KEY` before harvest/generate.
             4. Onboard LinkedIn session from **Session Status** in the Web UI.
 
             ### Requirements

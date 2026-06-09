@@ -22,6 +22,7 @@ class TestWebUI(unittest.TestCase):
         os.environ["IMAGE_DIR"] = os.path.join(self.test_dir, "images")
         os.environ["POST_DIR"] = os.path.join(self.test_dir, "posts")
         os.environ["LOG_DIR"] = os.path.join(self.test_dir, "logs")
+        os.environ["ENV_FILE"] = os.path.join(self.test_dir, ".env")
         
         # Ensure template folder is accessed correctly
         app.template_folder = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'src', 'templates')
@@ -55,6 +56,47 @@ class TestWebUI(unittest.TestCase):
         self.assertEqual(data["default_platform"], "linkedin")
         self.assertTrue(data["platform_locked"])
         self.assertEqual(data["supported_platforms"], ["linkedin"])
+
+    def test_api_settings_get_and_put(self):
+        response = self.client.get('/api/settings')
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertIn("sections", data)
+        self.assertEqual(data["env_path"], os.path.abspath(os.path.join(self.test_dir, ".env")))
+
+        response = self.client.put(
+            '/api/settings',
+            json={
+                "settings": {
+                    "AI_MODEL": "gemma-4-31b-it",
+                    "SEARCH_PROVIDER": "bing",
+                    "HEADLESS": "true",
+                    "BACKUP_ENABLED": "false",
+                    "MAX_POSTS_PER_RUN": 3,
+                    "GEMINI_API_KEY": "test-secret",
+                }
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        saved = json.loads(response.data)
+        self.assertEqual(saved["values"]["AI_MODEL"], "gemma-4-31b-it")
+        self.assertEqual(saved["values"]["HEADLESS"], "true")
+        self.assertEqual(saved["values"]["GEMINI_API_KEY"], "test-secret")
+        self.assertTrue(saved["gemini_api_key_configured"])
+
+        with open(os.environ["ENV_FILE"], "r", encoding="utf-8") as f:
+            env_text = f.read()
+        self.assertIn("GEMINI_API_KEY=test-secret", env_text)
+        self.assertIn("BACKUP_ENABLED=false", env_text)
+
+    def test_api_settings_validation_error(self):
+        response = self.client.put(
+            '/api/settings',
+            json={"settings": {"SEARCH_PROVIDER": "invalid-provider"}},
+        )
+        self.assertEqual(response.status_code, 400)
+        data = json.loads(response.data)
+        self.assertIn("error", data)
 
     def test_api_config_workbook_invalid(self):
         # Missing path resets to the canonical workbook
