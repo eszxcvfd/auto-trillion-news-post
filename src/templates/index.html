@@ -710,6 +710,10 @@
         <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9"></rect><rect x="14" y="3" width="7" height="5"></rect><rect x="14" y="12" width="7" height="9"></rect><rect x="3" y="16" width="7" height="5"></rect></svg>
         Dashboard
       </li>
+      <li class="menu-item" onclick="switchView('draft-run')">
+        <svg viewBox="0 0 24 24"><path d="M12 2v6"></path><path d="M12 16v6"></path><path d="M4.93 4.93l4.24 4.24"></path><path d="M14.83 14.83l4.24 4.24"></path><path d="M2 12h6"></path><path d="M16 12h6"></path><path d="M4.93 19.07l4.24-4.24"></path><path d="M14.83 9.17l4.24-4.24"></path></svg>
+        Draft Run
+      </li>
       <li class="menu-item" onclick="switchView('planner')">
         <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
         Posting Plan
@@ -754,6 +758,10 @@
       </div>
       
       <div class="header-right">
+        <button class="btn btn-primary" onclick="switchView('draft-run')">
+          <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg>
+          Generate Drafts
+        </button>
         <button class="btn" onclick="refreshCurrentView()">
           <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
           Refresh
@@ -765,9 +773,13 @@
       <!-- Dashboard View -->
       <div id="view-dashboard" class="view active">
         <div class="card">
-          <div class="card-title">
+          <div class="card-title" style="flex-wrap: wrap; gap: 8px;">
             <span>Workbook Inspection</span>
-            <div id="dashboard-warnings" style="font-size:0.85rem; color:var(--status-warning);"></div>
+            <div style="display:flex; align-items:center; gap:12px; margin-left:auto;">
+              <div id="dashboard-sync-meta" style="font-size:0.75rem; color:var(--text-muted); text-align:right;"></div>
+              <button class="btn" id="repair-drafts-btn" style="display:none; font-size:0.75rem; padding:6px 10px;" onclick="repairBrokenDrafts()">Repair Broken Draft Links</button>
+              <div id="dashboard-warnings" style="font-size:0.85rem; color:var(--status-warning);"></div>
+            </div>
           </div>
           
           <div id="sheet-tabs" class="tabs">
@@ -778,7 +790,7 @@
             <table id="workbook-table">
               <thead>
                 <tr>
-                  <th style="width: 50px;">#</th>
+                  <th style="width: 50px;" title="Article ID from the Excel # column (not the Excel row number)">ID</th>
                   <th>Title</th>
                   <th>Image Path / Drive URL</th>
                   <th>Link Post Status</th>
@@ -790,6 +802,48 @@
                 <tr><td colspan="5" style="text-align:center; padding: 40px; color:var(--text-muted);">Loading sheets...</td></tr>
               </tbody>
             </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Draft Run View -->
+      <div id="view-draft-run" class="view">
+        <div style="display:grid; grid-template-columns: 1.5fr 1fr; gap: 24px;">
+          <div class="card">
+            <div class="card-title">Generate New Articles and Drafts</div>
+            <p style="color:var(--text-muted); line-height:1.6; margin-bottom:20px;">
+              Launch the shared harvest + generate pipeline from the Web UI. This reuses the same search,
+              workbook append, and AI draft generation flow as the CLI.
+            </p>
+
+            <form id="draft-run-form" onsubmit="submitDraftRun(event)">
+              <div class="form-group">
+                <label for="draft-keywords-path">Keywords File</label>
+                <input type="text" id="draft-keywords-path" class="form-control" value="keywords.txt" placeholder="e.g. keywords.txt">
+              </div>
+
+              <div class="form-group">
+                <label for="draft-platforms">Platforms (Comma-separated, optional)</label>
+                <input type="text" id="draft-platforms" class="form-control" placeholder="Leave blank to generate all missing platform drafts">
+                <small style="color:var(--text-muted); font-size:0.75rem; margin-top:4px; display:block;">
+                  Example: <code>linkedin,facebook,x</code>. Leave blank to use the configured default platform.
+                </small>
+              </div>
+
+              <div class="form-group">
+                <label for="draft-limit">New Articles To Harvest</label>
+                <input type="number" id="draft-limit" class="form-control" value="2" min="1" title="Limits newly harvested rows. Existing rows with missing drafts are still backfilled when no new articles are saved.">
+              </div>
+
+              <button type="submit" class="btn btn-primary">Start Harvest & Generate</button>
+            </form>
+          </div>
+
+          <div class="card">
+            <div class="card-title">Latest Manual Draft Run</div>
+            <div id="draft-run-status" style="min-height: 180px; color:var(--text-muted); line-height:1.6;">
+              No manual draft run has been started from the Web UI yet.
+            </div>
           </div>
         </div>
       </div>
@@ -908,23 +962,19 @@
         </div>
 
         <div class="card">
-          <div class="card-title">Change Active Workbook</div>
-          <div class="form-group">
-            <label for="wb-custom-path">Enter custom workbook path or choose below</label>
-            <div style="display:flex; gap:10px;">
-              <input type="text" id="wb-custom-path" class="form-control" placeholder="Absolute or relative path to .xlsx file">
-              <button class="btn btn-primary" onclick="setWorkbookPath()">Set Workbook</button>
-            </div>
-          </div>
-          
-          <div class="table-container" style="margin-top:20px;">
+          <div class="card-title">Active Workbook</div>
+          <p style="color:var(--text-muted); font-size:0.9rem; line-height:1.6; margin-bottom:16px;">
+            Operator flows always read and write the canonical workbook
+            <strong>Trillion $ news.xlsx</strong> in the output folder.
+            Timestamped backup copies are kept separately and cannot be selected here.
+          </p>
+          <div class="table-container">
             <table>
               <thead>
                 <tr>
                   <th>Workbook Name</th>
                   <th>Location</th>
                   <th>Full Path</th>
-                  <th style="width:100px; text-align:right;">Action</th>
                 </tr>
               </thead>
               <tbody id="workbooks-list">
@@ -1076,6 +1126,36 @@
     </div>
   </div>
 
+  <!-- Session Onboarding Control Console Overlay Modal -->
+  <div class="modal-overlay" id="onboarding-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="spinner" id="onboarding-spinner"></div>
+        <span id="onboard-modal-title-text">Session Onboarding Active</span>
+      </div>
+      
+      <div class="modal-body">
+        <div class="card" style="background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.05); margin-bottom:16px;">
+          <div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:6px;">Target Platform</div>
+          <div style="font-weight:600; font-size:1.05rem;" id="onboard-modal-platform">Loading platform...</div>
+        </div>
+        
+        <div id="onboarding-step-desc" style="line-height:1.6; font-size:0.95rem;">
+          Initializing visible Chromium browser for manual authentication. Please wait...
+        </div>
+      </div>
+      
+      <div class="modal-actions">
+        <button class="btn" id="btn-onboard-cancel" onclick="cancelOnboardJob()" style="background:rgba(255, 23, 68, 0.1); border-color:var(--status-error); color:var(--status-error);">
+          Cancel Onboarding
+        </button>
+        <button class="btn btn-primary" id="btn-onboard-confirm" onclick="confirmOnboardJob()" style="display:none;">
+          Confirm Logged In
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Toasts Container -->
   <div class="toast-container" id="toast-container"></div>
 
@@ -1085,6 +1165,8 @@
     let sheetsData = [];
     let currentSheetName = "";
     let activeJobTimer = null;
+    let draftRunTimer = null;
+    let currentDraftRunId = null;
     let openRows = new Set(); // Track expanded rows
 
     // Initialization
@@ -1092,14 +1174,11 @@
       loadConfig();
       loadWorkbooksList();
       checkActivePostingJob();
+      checkActiveOnboardingJob();
       switchView('dashboard');
       
       // Load standard sessions grid
-      renderSessionsGrid({
-        "linkedin": "login-required",
-        "facebook": "login-required",
-        "x": "login-required"
-      });
+      loadSessionsStatus();
     });
 
     // View Routing
@@ -1123,8 +1202,10 @@
       // Load view specifics
       if (viewName === 'dashboard') {
         loadWorkbookData();
+      } else if (viewName === 'draft-run') {
+        loadLatestDraftRun();
       } else if (viewName === 'sessions') {
-        checkSessions();
+        loadSessionsStatus();
       } else if (viewName === 'config') {
         loadConfig();
         loadWorkbooksList();
@@ -1211,9 +1292,6 @@
               <td style="font-weight:600;">${wb.name}</td>
               <td style="color:var(--text-muted);">${wb.folder}</td>
               <td style="font-family:monospace;font-size:0.8rem;">${wb.path}</td>
-              <td style="text-align:right;">
-                <button class="btn btn-secondary" style="padding:4px 8px; font-size:0.8rem;" onclick="activateWorkbook('${wb.path}')">Select</button>
-              </td>
             `;
             tbody.appendChild(tr);
           });
@@ -1255,7 +1333,7 @@
       const tbody = document.getElementById('workbook-table-body');
       tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding: 40px; color:var(--text-muted);"><div class="spinner" style="vertical-align:middle;margin-right:10px;"></div>Ingesting Excel sheets...</td></tr>';
       
-      fetch('/api/workbook/inspect')
+      fetch(`/api/workbook/inspect?_=${Date.now()}`, { cache: 'no-store' })
         .then(res => {
           if (!res.ok) {
             return res.json().then(d => { throw new Error(d.error || 'Failed to inspect workbook') });
@@ -1264,13 +1342,22 @@
         })
         .then(data => {
           sheetsData = data.sheets;
+
+          const syncMeta = document.getElementById('dashboard-sync-meta');
+          if (syncMeta) {
+            const modified = data.modified_at ? new Date(data.modified_at).toLocaleString() : 'unknown';
+            syncMeta.innerHTML = `<div style="font-family:monospace;">${escapeHtml(data.path || '')}</div><div>Last saved: ${escapeHtml(modified)}</div>`;
+          }
           
           const warningContainer = document.getElementById('dashboard-warnings');
+          const repairBtn = document.getElementById('repair-drafts-btn');
           if (data.warnings && data.warnings.length > 0) {
             warningContainer.innerText = `${data.warnings.length} Ingest Warnings`;
             warningContainer.title = data.warnings.join('\n');
+            if (repairBtn) repairBtn.style.display = 'inline-flex';
           } else {
             warningContainer.innerText = '';
+            if (repairBtn) repairBtn.style.display = 'none';
           }
 
           // Build tabs
@@ -1342,7 +1429,7 @@
           <td><span style="font-family:monospace; font-size:0.75rem; color:var(--accent-cyan); word-break:break-all;">${row.image_link || 'None'}</span></td>
           <td>${postStatusSummary}</td>
           <td style="text-align:right;" class="actions">
-            <button class="btn btn-secondary" style="padding: 6px 12px; font-size:0.8rem;" onclick="triggerPostDropdown('${sheetName}', ${row.id}, this)">Post</button>
+            ${renderPostActionButton(sheetName, row)}
           </td>
         `;
         tbody.appendChild(tr);
@@ -1414,19 +1501,20 @@
 
     function renderDraftsPreview(row) {
       const platforms = [
-        { key: 'linkedin_draft', label: 'LinkedIn' },
-        { key: 'facebook_draft', label: 'Facebook' },
-        { key: 'x_draft', label: 'X (Twitter)' },
-        { key: 'instagram_draft', label: 'Instagram' },
-        { key: 'pinterest_draft', label: 'Pinterest' },
-        { key: 'threads_draft', label: 'Threads' },
-        { key: 'tiktok_draft', label: 'TikTok' },
-        { key: 'youtube_draft', label: 'YouTube' }
+        { key: 'linkedin_draft', label: 'LinkedIn', brokenKey: 'linkedin' },
+        { key: 'facebook_draft', label: 'Facebook', brokenKey: 'facebook' },
+        { key: 'x_draft', label: 'X (Twitter)', brokenKey: 'x' },
+        { key: 'instagram_draft', label: 'Instagram', brokenKey: 'instagram' },
+        { key: 'pinterest_draft', label: 'Pinterest', brokenKey: 'pinterest' },
+        { key: 'threads_draft', label: 'Threads', brokenKey: 'threads' },
+        { key: 'tiktok_draft', label: 'TikTok', brokenKey: 'tiktok' },
+        { key: 'youtube_draft', label: 'YouTube', brokenKey: 'youtube' }
       ];
       
       let html = '';
       platforms.forEach(p => {
         const content = row[p.key];
+        const brokenRef = row.broken_draft_refs && row.broken_draft_refs[p.brokenKey];
         if (content) {
           html += `
             <div class="draft-item">
@@ -1435,6 +1523,16 @@
                 <span class="badge badge-info" style="font-size:0.65rem; padding: 2px 6px;">Draft exists</span>
               </div>
               <div class="draft-body">${escapeHtml(content)}</div>
+            </div>
+          `;
+        } else if (brokenRef) {
+          html += `
+            <div class="draft-item">
+              <div class="draft-header">
+                <span>${p.label}</span>
+                <span class="badge badge-warning" style="font-size:0.65rem; padding: 2px 6px;">File missing in Excel</span>
+              </div>
+              <div class="draft-body" style="color:var(--status-warning); font-family:monospace; font-size:0.75rem;">${escapeHtml(brokenRef)}</div>
             </div>
           `;
         }
@@ -1446,10 +1544,43 @@
       return html;
     }
 
+    function repairBrokenDrafts() {
+      fetch('/api/workbook/repair-drafts', { method: 'POST' })
+        .then(res => res.json().then(data => ({ ok: res.ok, data })))
+        .then(({ ok, data }) => {
+          if (!ok || data.error) {
+            throw new Error(data.error || 'Failed to repair workbook drafts');
+          }
+          showToast(`Cleared ${data.cleared_count || 0} broken draft link(s) from Excel.`);
+          loadWorkbookData();
+        })
+        .catch(err => showToast(err.message, 'error'));
+    }
+
     function escapeHtml(text) {
       const div = document.createElement('div');
       div.innerText = text;
       return div.innerHTML;
+    }
+
+    function formatPostBlockers(row) {
+      const blockers = row.post_blockers || [];
+      if (blockers.length === 0) {
+        return 'Generate drafts for this row first, then retry posting.';
+      }
+      return blockers
+        .slice(0, 4)
+        .map(b => `${b.label}: ${b.reason}`)
+        .join('; ');
+    }
+
+    function renderPostActionButton(sheetName, row) {
+      const availablePlats = row.eligible_platforms || [];
+      if (availablePlats.length === 0) {
+        const title = formatPostBlockers(row);
+        return `<button class="btn btn-secondary" style="padding: 6px 12px; font-size:0.8rem; opacity:0.55; cursor:not-allowed;" disabled title="${escapeHtml(title)}">Post</button>`;
+      }
+      return `<button class="btn btn-secondary" style="padding: 6px 12px; font-size:0.8rem;" onclick="triggerPostDropdown('${sheetName}', ${row.id}, this)">Post</button>`;
     }
 
     // Trigger Posting
@@ -1458,31 +1589,18 @@
       const sheet = sheetsData.find(s => s.name === sheetName);
       const row = sheet.rows.find(r => r.id === rowId);
       
-      // Get platforms that have drafts
-      const platforms = [
-        { key: 'linkedin_draft', id: 'linkedin', label: 'LinkedIn' },
-        { key: 'facebook_draft', id: 'facebook', label: 'Facebook' },
-        { key: 'x_draft', id: 'x', label: 'X (Twitter)' },
-        { key: 'instagram_draft', id: 'instagram', label: 'Instagram' },
-        { key: 'pinterest_draft', id: 'pinterest', label: 'Pinterest' },
-        { key: 'threads_draft', id: 'threads', label: 'Threads' },
-        { key: 'tiktok_draft', id: 'tiktok', label: 'TikTok' },
-        { key: 'youtube_draft', id: 'youtube', label: 'YouTube' }
-      ];
-      
-      const availablePlats = platforms.filter(p => !!row[p.key]);
+      const availablePlats = row.eligible_platforms || [];
       
       if (availablePlats.length === 0) {
-        showToast('No drafts available to post on this row. Please run generate first.', 'warning');
+        showToast(formatPostBlockers(row), 'warning');
         return;
       }
       
-      // If only one platform, trigger directly, else prompt
+      // If only one eligible platform, trigger directly; otherwise prompt
       if (availablePlats.length === 1) {
-        triggerPosting(availablePlats[0].id, rowId, sheetName);
+        triggerPosting(availablePlats[0].platform, rowId, sheetName);
       } else {
-        // Build simple quick dropdown prompt
-        const selectHTML = availablePlats.map(p => `<option value="${p.id}">${p.label}</option>`).join('');
+        const selectHTML = availablePlats.map(p => `<option value="${p.platform}">${p.label}</option>`).join('');
         const overlay = document.createElement('div');
         overlay.className = 'modal-overlay';
         overlay.style.display = 'flex';
@@ -1537,8 +1655,29 @@
       });
     }
 
+    let postingActionInFlight = false;
+
+    function resetPostingModalButtons() {
+      postingActionInFlight = false;
+      const btnConfirm = document.getElementById('btn-post-confirm');
+      const btnSkip = document.getElementById('btn-post-skip');
+      if (btnConfirm) {
+        btnConfirm.disabled = false;
+        btnConfirm.style.opacity = '1';
+      }
+      if (btnSkip) {
+        btnSkip.disabled = false;
+        btnSkip.style.opacity = '1';
+        btnSkip.innerText = 'Skip Platform';
+        btnSkip.style.background = 'rgba(255, 23, 68, 0.1)';
+        btnSkip.style.borderColor = 'var(--status-error)';
+        btnSkip.style.color = 'var(--status-error)';
+      }
+    }
+
     // Active posting job modal control
     function openPostingModal(job) {
+      resetPostingModalButtons();
       const modal = document.getElementById('posting-modal');
       modal.style.display = 'flex';
       
@@ -1590,21 +1729,26 @@
         btnSkip.style.display = 'inline-block';
       }
       else if (job.status === 'success') {
+        postingActionInFlight = false;
         spinner.className = '';
         titleText.innerText = 'Posting Success';
         stepDesc.innerHTML = `<div style="text-align:center; padding:20px; color:var(--status-success)">
           <svg style="width:48px;height:48px;margin-bottom:10px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
           <div style="font-size:1.1rem; font-weight:600;">Post Successfully Confirmed!</div>
-          <div style="font-size:0.85rem; color:var(--text-muted); margin-top:6px; word-break:break-all;">URL: ${job.post_url}</div>
+          <div style="font-size:0.85rem; color:var(--text-muted); margin-top:6px; word-break:break-all;">URL: ${job.post_url || '[posted-no-link]'}</div>
         </div>`;
         confirmSection.style.display = 'none';
         btnConfirm.style.display = 'none';
+        btnConfirm.disabled = true;
         btnSkip.innerText = 'Close';
+        btnSkip.disabled = false;
+        btnSkip.style.opacity = '1';
         btnSkip.style.background = 'var(--bg-tertiary)';
         btnSkip.style.borderColor = 'var(--border-color)';
         btnSkip.style.color = '#fff';
       }
       else if (job.status === 'skipped') {
+        postingActionInFlight = false;
         spinner.className = '';
         titleText.innerText = 'Posting Skipped';
         stepDesc.innerHTML = `<div style="text-align:center; padding:20px; color:var(--status-warning)">
@@ -1614,11 +1758,14 @@
         confirmSection.style.display = 'none';
         btnConfirm.style.display = 'none';
         btnSkip.innerText = 'Close';
+        btnSkip.disabled = false;
+        btnSkip.style.opacity = '1';
         btnSkip.style.background = 'var(--bg-tertiary)';
         btnSkip.style.borderColor = 'var(--border-color)';
         btnSkip.style.color = '#fff';
       }
       else if (job.status === 'error') {
+        postingActionInFlight = false;
         spinner.className = '';
         titleText.innerText = 'Posting Error';
         stepDesc.innerHTML = `<div style="text-align:center; padding:20px; color:var(--status-error)">
@@ -1629,6 +1776,8 @@
         confirmSection.style.display = 'none';
         btnConfirm.style.display = 'none';
         btnSkip.innerText = 'Close';
+        btnSkip.disabled = false;
+        btnSkip.style.opacity = '1';
         btnSkip.style.background = 'var(--bg-tertiary)';
         btnSkip.style.borderColor = 'var(--border-color)';
         btnSkip.style.color = '#fff';
@@ -1642,6 +1791,8 @@
           if (data.active) {
             openPostingModal(data.job);
             pollActivePostingJob();
+          } else if (data.job && ['success', 'skipped', 'error'].includes(data.job.status)) {
+            openPostingModal(data.job);
           }
         });
     }
@@ -1654,6 +1805,12 @@
           .then(res => res.json())
           .then(data => {
             if (!data.active) {
+              if (data.job) {
+                updatePostingModalState(data.job);
+                if (['success', 'skipped', 'error'].includes(data.job.status)) {
+                  loadWorkbookData();
+                }
+              }
               clearInterval(activeJobTimer);
               return;
             }
@@ -1672,8 +1829,16 @@
     }
 
     function confirmPostJob() {
+      const btnConfirm = document.getElementById('btn-post-confirm');
+      if (postingActionInFlight || (btnConfirm && btnConfirm.disabled)) return;
+
       const url = document.getElementById('post-confirm-url').value.trim();
-      
+      postingActionInFlight = true;
+      if (btnConfirm) {
+        btnConfirm.disabled = true;
+        btnConfirm.style.opacity = '0.6';
+      }
+
       fetch('/api/post/confirm', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1681,33 +1846,79 @@
       })
       .then(res => res.json())
       .then(data => {
-        if (data.error) showToast(data.error, 'error');
-        else showToast('Post URL submitted!');
+        if (data.error) {
+          postingActionInFlight = false;
+          if (btnConfirm) {
+            btnConfirm.disabled = false;
+            btnConfirm.style.opacity = '1';
+          }
+          showToast(data.error, 'error');
+        } else {
+          showToast(data.message || 'Post URL submitted!');
+          if (data.job) updatePostingModalState(data.job);
+          pollActivePostingJob();
+        }
+      })
+      .catch(() => {
+        postingActionInFlight = false;
+        if (btnConfirm) {
+          btnConfirm.disabled = false;
+          btnConfirm.style.opacity = '1';
+        }
+        showToast('Failed to confirm post', 'error');
       });
     }
 
+    function closePostingModal() {
+      document.getElementById('posting-modal').style.display = 'none';
+      resetPostingModalButtons();
+    }
+
     function skipPostJob() {
-      const closeBtnText = document.getElementById('btn-post-skip').innerText;
+      const btnSkip = document.getElementById('btn-post-skip');
+      const closeBtnText = btnSkip ? btnSkip.innerText.trim() : '';
       if (closeBtnText === 'Close') {
-        document.getElementById('posting-modal').style.display = 'none';
-        // Reset button
-        const btnSkip = document.getElementById('btn-post-skip');
-        btnSkip.innerText = 'Skip Platform';
-        btnSkip.style.background = 'rgba(255, 23, 68, 0.1)';
-        btnSkip.style.borderColor = 'var(--status-error)';
-        btnSkip.style.color = 'var(--status-error)';
+        closePostingModal();
         return;
+      }
+
+      if (postingActionInFlight || (btnSkip && btnSkip.disabled)) return;
+
+      postingActionInFlight = true;
+      if (btnSkip) {
+        btnSkip.disabled = true;
+        btnSkip.style.opacity = '0.6';
       }
 
       fetch('/api/post/skip', { method: 'POST' })
         .then(res => res.json())
         .then(data => {
-          if (data.error) showToast(data.error, 'error');
-          else showToast('Platform post skipped!');
+          if (data.error) {
+            postingActionInFlight = false;
+            if (btnSkip) {
+              btnSkip.disabled = false;
+              btnSkip.style.opacity = '1';
+            }
+            showToast(data.error, 'error');
+          } else {
+            showToast(data.message || 'Platform post skipped!');
+            if (data.job) updatePostingModalState(data.job);
+            pollActivePostingJob();
+          }
+        })
+        .catch(() => {
+          postingActionInFlight = false;
+          if (btnSkip) {
+            btnSkip.disabled = false;
+            btnSkip.style.opacity = '1';
+          }
+          showToast('Failed to skip post', 'error');
         });
     }
 
     // Sessions verification
+    let onboardingJobTimer = null;
+
     function checkSessions() {
       const container = document.getElementById('sessions-container');
       container.innerHTML = '<div style="grid-column: 1/-1; text-align:center; padding: 40px; color:var(--text-muted);"><div class="spinner" style="margin-bottom:10px;"></div>Checking local sessions. This launches headless Chrome instances, please wait...</div>';
@@ -1715,44 +1926,71 @@
       fetch('/api/sessions')
         .then(res => res.json())
         .then(data => {
-          renderSessionsGrid(data);
           showToast('Sessions checked successfully!');
+          loadSessionsStatus();
         })
         .catch(err => {
-          container.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--status-error);">Failed to verify sessions.</div>';
+          container.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--status-error);;">Failed to verify sessions.</div>';
           showToast('Failed to verify sessions', 'error');
         });
     }
 
-    function renderSessionsGrid(data) {
+    function loadSessionsStatus() {
+      const container = document.getElementById('sessions-container');
+      container.innerHTML = '<div style="grid-column: 1/-1; text-align:center; padding: 20px; color:var(--text-muted);"><div class="spinner"></div> Loading sessions status...</div>';
+      
+      fetch('/api/sessions/status')
+        .then(res => res.json())
+        .then(data => {
+          renderDetailedSessionsGrid(data);
+        })
+        .catch(err => {
+          container.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--status-error);">Failed to load session statuses.</div>';
+          showToast('Failed to load sessions status', 'error');
+        });
+    }
+
+    function renderDetailedSessionsGrid(data) {
       const container = document.getElementById('sessions-container');
       container.innerHTML = '';
       
       const platforms = [
-        { id: 'linkedin', label: 'LinkedIn' },
-        { id: 'facebook', label: 'Facebook' },
-        { id: 'x', label: 'X (Twitter)' },
-        { id: 'instagram', label: 'Instagram' },
-        { id: 'pinterest', label: 'Pinterest' },
-        { id: 'threads', label: 'Threads' },
-        { id: 'tiktok', label: 'TikTok' },
-        { id: 'youtube', label: 'YouTube' }
+        { id: 'linkedin', label: 'LinkedIn', supported: true },
+        { id: 'facebook', label: 'Facebook', supported: true },
+        { id: 'x', label: 'X (Twitter)', supported: true },
+        { id: 'instagram', label: 'Instagram', supported: true },
+        { id: 'pinterest', label: 'Pinterest', supported: true },
+        { id: 'threads', label: 'Threads', supported: true },
+        { id: 'tiktok', label: 'TikTok', supported: true, bestEffort: true },
+        { id: 'youtube', label: 'YouTube', supported: true, bestEffort: true }
       ];
       
       platforms.forEach(p => {
-        const status = data[p.id] || 'unknown';
+        let status = 'login-required';
+        let lastChecked = null;
+        
+        if (data[p.id]) {
+          status = data[p.id].status || 'login-required';
+          lastChecked = data[p.id].last_checked_at;
+        } else if (!p.supported) {
+          status = 'unsupported';
+        }
+        
         let badgeClass = 'badge-muted';
         let statusText = 'Not Checked';
         
-        if (status === 'logged-in') {
+        if (status === 'ready') {
           badgeClass = 'badge-success';
-          statusText = 'Logged In';
+          statusText = 'Ready';
         } else if (status === 'login-required') {
           badgeClass = 'badge-error';
           statusText = 'Login Required';
-        } else if (status === 'error') {
+        } else if (status === 'invalid') {
           badgeClass = 'badge-error';
-          statusText = 'Check Failed';
+          statusText = 'Session Invalid';
+        } else if (status === 'expired') {
+          badgeClass = 'badge-warning';
+          statusText = 'Session Expired';
         } else if (status === 'unsupported') {
           badgeClass = 'badge-muted';
           statusText = 'Not Supported';
@@ -1760,15 +1998,235 @@
         
         const card = document.createElement('div');
         card.className = 'session-card';
+        card.style.flexDirection = 'column';
+        card.style.alignItems = 'stretch';
+        card.style.gap = '12px';
+        
+        let checkedTimeStr = lastChecked ? `Checked: ${formatDateTime(lastChecked)}` : 'Never checked';
+        if (!p.supported) {
+          checkedTimeStr = 'Automation not supported';
+        }
+        
+        let actionsHTML = '';
+        if (p.supported) {
+          actionsHTML = `
+            <div style="display:flex; gap:8px; margin-top:8px;">
+              <button class="btn btn-primary" style="flex:1; padding:6px 8px; font-size:0.75rem; justify-content:center;" onclick="startOnboarding('${p.id}')">Onboard</button>
+              <button class="btn" style="padding:6px 8px; font-size:0.75rem; border-color:var(--status-error); color:var(--status-error); background:rgba(255,23,68,0.05);" onclick="clearSession('${p.id}')">Clear</button>
+            </div>
+          `;
+        }
+        
         card.innerHTML = `
-          <div class="session-icon">${p.label.charAt(0)}</div>
-          <div class="session-info">
-            <div class="session-name">${p.label}</div>
-            <span class="badge ${badgeClass}">${statusText}</span>
+          <div style="display:flex; align-items:center; gap:16px;">
+            <div class="session-icon" style="background: ${p.supported ? 'rgba(0,229,255,0.05)' : 'rgba(255,255,255,0.02)'}; color: ${p.supported ? 'var(--accent-cyan)' : 'var(--text-muted)'}">${p.label.charAt(0)}</div>
+            <div class="session-info">
+              <div class="session-name">${p.label}</div>
+              <div style="display:flex; align-items:center; gap:6px; margin-top:2px; flex-wrap:wrap;">
+                <span class="badge ${badgeClass}">${statusText}</span>
+                ${p.bestEffort ? '<span class="badge badge-warning" title="Best-effort MVP mode only">Best-effort MVP</span>' : ''}
+              </div>
+            </div>
           </div>
+          <div style="font-size:0.75rem; color:var(--text-muted); margin-top:4px;">
+            ${checkedTimeStr}
+          </div>
+          ${actionsHTML}
         `;
         container.appendChild(card);
       });
+    }
+
+    function startOnboarding(platform) {
+      showToast(`Starting onboarding for ${platform}...`);
+      fetch('/api/sessions/onboard', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ platform })
+      })
+      .then(res => {
+        if (!res.ok) {
+          return res.json().then(d => { throw new Error(d.error) });
+        }
+        return res.json();
+      })
+      .then(data => {
+        showToast('Onboarding browser launched!');
+        openOnboardingModal(data.job);
+        pollActiveOnboardingJob();
+      })
+      .catch(err => {
+        showToast(err.message, 'error');
+      });
+    }
+
+    function clearSession(platform) {
+      if (!confirm(`Are you sure you want to clear session cookies for ${platform}?`)) return;
+      showToast(`Clearing session for ${platform}...`);
+      fetch('/api/sessions/clear', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ platform })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.error) {
+          showToast(data.error, 'error');
+        } else {
+          showToast(data.message);
+          loadSessionsStatus();
+        }
+      })
+      .catch(err => {
+        showToast('Failed to clear session', 'error');
+      });
+    }
+
+    function checkActiveOnboardingJob() {
+      fetch('/api/sessions/onboard/status')
+        .then(res => res.json())
+        .then(data => {
+          if (data.active && ['preparing', 'pending-operator'].includes(data.job.status)) {
+            openOnboardingModal(data.job);
+            pollActiveOnboardingJob();
+          }
+        });
+    }
+
+    function pollActiveOnboardingJob() {
+      if (onboardingJobTimer) clearInterval(onboardingJobTimer);
+      
+      onboardingJobTimer = setInterval(() => {
+        fetch('/api/sessions/onboard/status')
+          .then(res => res.json())
+          .then(data => {
+            if (!data.active) {
+              clearInterval(onboardingJobTimer);
+              closeOnboardingModal();
+              return;
+            }
+            updateOnboardingModalState(data.job);
+            
+            if (['success', 'error'].includes(data.job.status)) {
+              clearInterval(onboardingJobTimer);
+              setTimeout(() => {
+                closeOnboardingModal();
+                loadSessionsStatus();
+              }, 3000);
+            }
+          })
+          .catch(err => {
+            clearInterval(onboardingJobTimer);
+          });
+      }, 1000);
+    }
+
+    function openOnboardingModal(job) {
+      const modal = document.getElementById('onboarding-modal');
+      modal.style.display = 'flex';
+      document.getElementById('onboard-modal-platform').innerText = job.platform.toUpperCase();
+      updateOnboardingModalState(job);
+    }
+
+    function closeOnboardingModal() {
+      document.getElementById('onboarding-modal').style.display = 'none';
+      const btnCancel = document.getElementById('btn-onboard-cancel');
+      btnCancel.innerText = 'Cancel Onboarding';
+      btnCancel.style.background = 'rgba(255, 23, 68, 0.1)';
+      btnCancel.style.borderColor = 'var(--status-error)';
+      btnCancel.style.color = 'var(--status-error)';
+    }
+
+    function updateOnboardingModalState(job) {
+      const stepDesc = document.getElementById('onboarding-step-desc');
+      const btnConfirm = document.getElementById('btn-onboard-confirm');
+      const btnCancel = document.getElementById('btn-onboard-cancel');
+      const spinner = document.getElementById('onboarding-spinner');
+      const titleText = document.getElementById('onboard-modal-title-text');
+      
+      if (job.status === 'preparing') {
+        spinner.className = 'spinner';
+        titleText.innerText = 'Session Onboarding Active';
+        stepDesc.innerHTML = `<div style="text-align:center;padding:20px;">
+          <div class="spinner" style="margin-bottom:10px;"></div>
+          <div>Launching visible Chromium browser for manual authentication. Please wait...</div>
+        </div>`;
+        btnConfirm.style.display = 'none';
+        btnCancel.style.display = 'inline-block';
+      } 
+      else if (job.status === 'pending-operator') {
+        spinner.className = '';
+        titleText.innerText = 'Operator Authentication Required';
+        stepDesc.innerHTML = `
+          <div style="background:rgba(0, 230, 118, 0.05); border:1px solid var(--status-success); padding:16px; border-radius:8px; margin-bottom:14px; font-weight:500;">
+            [ACTION REQUIRED] Headed Chromium browser has been launched.
+          </div>
+          <p>Please perform the following actions in the newly opened browser window:</p>
+          <ul style="margin-left:20px; margin-top:8px; margin-bottom:8px; line-height:1.6;">
+            <li>Enter your credentials and log in to <strong>${job.platform.toUpperCase()}</strong>.</li>
+            <li>Complete any necessary 2FA or Captchas manually.</li>
+            <li>Verify you have successfully reached the platform home page/feed.</li>
+          </ul>
+          <p style="margin-top:10px; font-weight:600; color:var(--accent-cyan)">After logging in successfully, click "Confirm Logged In" below to save this session.</p>
+        `;
+        btnConfirm.style.display = 'inline-block';
+        btnCancel.style.display = 'inline-block';
+      }
+      else if (job.status === 'success') {
+        spinner.className = '';
+        titleText.innerText = 'Onboarding Success';
+        stepDesc.innerHTML = `<div style="text-align:center; padding:20px; color:var(--status-success)">
+          <svg style="width:48px;height:48px;margin-bottom:10px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          <div style="font-size:1.1rem; font-weight:600;">Session Verified and Saved!</div>
+          <div style="font-size:0.85rem; color:var(--text-muted); margin-top:6px;">You can now post to ${job.platform.toUpperCase()} using this saved session.</div>
+        </div>`;
+        btnConfirm.style.display = 'none';
+        btnCancel.innerText = 'Close';
+        btnCancel.style.background = 'var(--bg-tertiary)';
+        btnCancel.style.borderColor = 'var(--border-color)';
+        btnCancel.style.color = '#fff';
+      }
+      else if (job.status === 'error') {
+        spinner.className = '';
+        titleText.innerText = 'Onboarding Error';
+        stepDesc.innerHTML = `<div style="text-align:center; padding:20px; color:var(--status-error)">
+          <svg style="width:48px;height:48px;margin-bottom:10px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+          <div style="font-size:1.1rem; font-weight:600;">Onboarding Failed!</div>
+          <div style="font-size:0.85rem; color:var(--text-muted); margin-top:6px;">${job.error_message || 'Unknown error occurred'}</div>
+        </div>`;
+        btnConfirm.style.display = 'none';
+        btnCancel.innerText = 'Close';
+        btnCancel.style.background = 'var(--bg-tertiary)';
+        btnCancel.style.borderColor = 'var(--border-color)';
+        btnCancel.style.color = '#fff';
+      }
+    }
+
+    function confirmOnboardJob() {
+      fetch('/api/sessions/onboard/confirm', { method: 'POST' })
+        .then(res => res.json())
+        .then(data => {
+          if (data.error) showToast(data.error, 'error');
+          else showToast('Confirmation signal sent!');
+        });
+    }
+
+    function cancelOnboardJob() {
+      const cancelBtnText = document.getElementById('btn-onboard-cancel').innerText;
+      if (cancelBtnText === 'Close') {
+        closeOnboardingModal();
+        return;
+      }
+
+      fetch('/api/sessions/onboard/cancel', { method: 'POST' })
+        .then(res => res.json())
+        .then(data => {
+          if (data.error) showToast(data.error, 'error');
+          else {
+            showToast('Onboarding cancelled!');
+            closeOnboardingModal();
+          }
+        });
     }
 
     // Posting Plan (dry-run)
@@ -1852,6 +2310,117 @@
           planContainer.innerHTML = '<div style="color:var(--status-error);">Error building plan.</div>';
           showToast('Failed to build posting plan', 'error');
         });
+    }
+
+    function submitDraftRun(event) {
+      event.preventDefault();
+
+      const keywords_path = document.getElementById('draft-keywords-path').value.trim() || 'keywords.txt';
+      const platforms = document.getElementById('draft-platforms').value.trim();
+      const limit = parseInt(document.getElementById('draft-limit').value, 10);
+      const statusContainer = document.getElementById('draft-run-status');
+
+      statusContainer.innerHTML = '<div style="text-align:center; padding:24px;"><div class="spinner" style="margin-bottom:12px;"></div>Queueing manual draft run...</div>';
+
+      fetch('/api/drafts/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          keywords_path,
+          platforms,
+          limit: Number.isNaN(limit) ? null : limit
+        })
+      })
+      .then(res => res.json().then(data => ({ ok: res.ok, data })))
+      .then(({ ok, data }) => {
+        if (!ok || data.error) {
+          throw new Error(data.error || 'Failed to start manual draft run');
+        }
+
+        currentDraftRunId = data.run_id;
+        showToast('Manual draft run started. Tracking status below.');
+        loadLatestDraftRun(currentDraftRunId);
+      })
+      .catch(err => {
+        statusContainer.innerHTML = `<div style="color:var(--status-error); font-weight:500;">${escapeHtml(err.message)}</div>`;
+        showToast(err.message, 'error');
+      });
+    }
+
+    function loadLatestDraftRun(runId = currentDraftRunId) {
+      const statusContainer = document.getElementById('draft-run-status');
+      if (!statusContainer) return;
+
+      if (runId) {
+        fetch(`/api/history/${runId}`)
+          .then(res => res.json().then(data => ({ ok: res.ok, data })))
+          .then(({ ok, data }) => {
+            if (!ok || data.error) {
+              throw new Error(data.error || 'Failed to load draft run status');
+            }
+            renderDraftRunStatus(data);
+          })
+          .catch(err => {
+            statusContainer.innerHTML = `<div style="color:var(--status-error); font-weight:500;">${escapeHtml(err.message)}</div>`;
+          });
+        return;
+      }
+
+      fetch('/api/history?limit=10')
+        .then(res => res.json())
+        .then(data => {
+          const latestRun = (data || []).find(run => run.schedule_id === null && run.trigger_type === 'manual');
+          if (!latestRun) {
+            clearTimeout(draftRunTimer);
+            draftRunTimer = null;
+            statusContainer.innerHTML = 'No manual draft run has been started from the Web UI yet.';
+            return;
+          }
+          currentDraftRunId = latestRun.run_id;
+          renderDraftRunStatus(latestRun);
+        })
+        .catch(err => {
+          statusContainer.innerHTML = `<div style="color:var(--status-error); font-weight:500;">Failed to load run history: ${escapeHtml(err.message)}</div>`;
+        });
+    }
+
+    function renderDraftRunStatus(run) {
+      const statusContainer = document.getElementById('draft-run-status');
+      if (!statusContainer || !run) return;
+
+      let badgeClass = 'badge-muted';
+      if (run.status === 'completed') badgeClass = 'badge-success';
+      else if (run.status === 'partial') badgeClass = 'badge-warning';
+      else if (run.status === 'failed') badgeClass = 'badge-error';
+      else if (run.status === 'running') badgeClass = 'badge-pending';
+
+      statusContainer.innerHTML = `
+        <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start; margin-bottom:16px;">
+          <div>
+            <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:6px;">Run ID</div>
+            <div style="font-family:monospace; color:var(--accent-cyan); word-break:break-all;">${escapeHtml(run.run_id)}</div>
+          </div>
+          <span class="badge ${badgeClass}">${escapeHtml(run.status)}</span>
+        </div>
+        <div style="display:grid; gap:10px; font-size:0.9rem;">
+          <div><strong>Started:</strong> ${escapeHtml(formatDateTime(run.started_at))}</div>
+          <div><strong>Finished:</strong> ${escapeHtml(formatDateTime(run.finished_at))}</div>
+          <div><strong>Summary:</strong> ${escapeHtml(run.summary || 'Run is still in progress.')}</div>
+          ${run.error_message ? `<div style="color:var(--status-error);"><strong>Error:</strong> ${escapeHtml(run.error_message)}</div>` : ''}
+        </div>
+        <div style="margin-top:18px; display:flex; gap:10px; flex-wrap:wrap;">
+          <button class="btn btn-secondary" onclick="switchView('history')">Open Run History</button>
+          <button class="btn" onclick="loadLatestDraftRun('${escapeHtml(run.run_id)}')">Refresh Status</button>
+        </div>
+      `;
+
+      clearTimeout(draftRunTimer);
+      draftRunTimer = null;
+      if (run.status === 'running') {
+        draftRunTimer = setTimeout(() => loadLatestDraftRun(run.run_id), 3000);
+      } else {
+        loadWorkbookData();
+      }
     }
 
     // Manual Writeback submit
