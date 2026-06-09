@@ -28,6 +28,7 @@ def write_post_file(item: NewsItem, content: str, config: AppConfig) -> str:
         else:
             output_dir = getattr(config, "output_dir", "./output")
             post_dir = os.path.join(output_dir, "posts")
+    post_dir = os.path.abspath(post_dir)
     os.makedirs(post_dir, exist_ok=True)
     
     padded_id = f"{item.id:03d}" if isinstance(item.id, int) else str(item.id)
@@ -69,8 +70,10 @@ URL: {item.url}
     with open(filepath, "w", encoding="utf-8") as f:
         f.write(markdown_content)
         
+    from src.draft_paths import format_post_path_for_workbook
+
     print(f"[SUCCESS] Saved post file: {filepath}")
-    return filepath
+    return format_post_path_for_workbook(filepath, config)
 
 def update_excel_row_with_post(item_id: int, post_file_path: str = None, top_hashtags: str = None, status: str = None, config: AppConfig = None, notes: str = None) -> bool:
     if openpyxl is None:
