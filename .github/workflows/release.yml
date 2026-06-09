@@ -107,21 +107,25 @@ jobs:
           body: |
             ## Trillion News Post Desktop ${{ github.ref_name }}
 
-            Electron operator shell bundling the local Flask Web UI and Python backend.
+            Self-contained desktop operator app. **No Python, Node, Playwright, or browser install required.**
 
             ### Included artifacts
             - **Linux:** AppImage + deb (x64)
             - **Windows:** NSIS installer + portable exe (x64)
 
-            ### First launch
-            1. Install and open the desktop app.
-            2. Operator data is stored under the app user-data directory (`output/`, `.env`).
-            3. Open **Settings** in the Web UI footer (or edit `.env` in user-data) and set `GEMINI_API_KEY` before harvest/generate.
-            4. Onboard LinkedIn session from **Session Status** in the Web UI.
+            ### Install and run
+            1. Download the installer/AppImage for your OS and open the app.
+            2. On first launch the app seeds operator data automatically (`output/`, `.env`, `keywords.txt`).
+            3. Open **Settings** (sidebar footer) and set `GEMINI_API_KEY`.
+            4. Use **Session Status** to onboard LinkedIn when you are ready to post.
+
+            ### Bundled runtime
+            - Python backend + dependencies
+            - Playwright Chromium for assisted posting
+            - Flask Web UI operator surface
 
             ### Requirements
             - Network access for Gemini API and LinkedIn
-            - Chromium is bundled via Playwright for assisted posting flows
 
             ### Verify build
             Python test suite passed on tag before packaging (`pytest tests/`).

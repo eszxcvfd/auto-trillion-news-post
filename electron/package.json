@@ -1,6 +1,6 @@
 {
   "name": "trillion-news-post-desktop",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Desktop operator surface for Trillion News Auto Post System",
   "main": "main.js",
   "author": "Trillion News",
@@ -13,6 +13,7 @@
   "private": true,
   "scripts": {
     "start": "electron .",
+    "start:linux": "ELECTRON_DISABLE_SANDBOX=1 electron .",
     "stage-app": "node scripts/stage-app.mjs",
     "prepare-runtime": "node scripts/prepare-runtime.mjs",
     "predist": "npm run stage-app",
@@ -57,6 +58,9 @@
       }
     ],
     "linux": {
+      "executableArgs": [
+        "--no-sandbox"
+      ],
       "target": [
         "AppImage",
         "deb"

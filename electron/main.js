@@ -6,6 +6,12 @@ const net = require('net');
 const http = require('http');
 const log = require('electron-log');
 
+if (process.platform === 'linux') {
+  app.commandLine.appendSwitch('no-sandbox');
+  app.commandLine.appendSwitch('disable-setuid-sandbox');
+  app.commandLine.appendSwitch('disable-gpu-sandbox');
+}
+
 let mainWindow = null;
 let pythonProcess = null;
 let serverPort = null;
@@ -56,7 +62,14 @@ function playwrightBrowsersPath() {
 function ensureOperatorEnv() {
   const dataRoot = userDataRoot();
   const outputDir = path.join(dataRoot, 'output');
-  fs.mkdirSync(outputDir, { recursive: true });
+  const imageDir = path.join(outputDir, 'Ảnh Trillion $ news');
+  const postDir = path.join(outputDir, 'posts');
+  const logDir = path.join(outputDir, 'logs');
+  const excelFile = path.join(outputDir, 'Trillion $ news.xlsx');
+
+  for (const dir of [outputDir, imageDir, postDir, logDir]) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
 
   const envPath = path.join(dataRoot, '.env');
   const examplePath = path.join(projectRoot(), '.env.example');
@@ -65,14 +78,22 @@ function ensureOperatorEnv() {
     log.info('Seeded operator .env from .env.example at', envPath);
   }
 
+  const keywordsPath = path.join(dataRoot, 'keywords.txt');
+  const bundledKeywords = path.join(projectRoot(), 'keywords.txt');
+  if (!fs.existsSync(keywordsPath) && fs.existsSync(bundledKeywords)) {
+    fs.copyFileSync(bundledKeywords, keywordsPath);
+    log.info('Seeded operator keywords at', keywordsPath);
+  }
+
   const env = {
     ...process.env,
     ENV_FILE: envPath,
+    KEYWORDS_FILE: keywordsPath,
     OUTPUT_DIR: outputDir,
-    EXCEL_FILE: path.join(outputDir, 'Trillion $ news.xlsx'),
-    IMAGE_DIR: path.join(outputDir, 'Ảnh Trillion $ news'),
-    POST_DIR: path.join(outputDir, 'posts'),
-    LOG_DIR: path.join(outputDir, 'logs'),
+    EXCEL_FILE: excelFile,
+    IMAGE_DIR: imageDir,
+    POST_DIR: postDir,
+    LOG_DIR: logDir,
   };
 
   const browsersPath = playwrightBrowsersPath();
