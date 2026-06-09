@@ -229,6 +229,16 @@ def execute_search(keywords_path: str, limit: int = None):
     print(json.dumps(dict_news, indent=2, ensure_ascii=False))
     return saved_news
 
+def normalize_generate_platform(platform: str = None) -> str:
+    """Blank platform means generate drafts for every supported platform."""
+    if platform is None:
+        return "all"
+    cleaned = str(platform).strip().lower()
+    if not cleaned or cleaned == "none":
+        return "all"
+    return platform
+
+
 def execute_generate(platform: str = None, limit: int = None, target_ids: list = None):
     config = AppConfig()
     
@@ -239,7 +249,7 @@ def execute_generate(platform: str = None, limit: int = None, target_ids: list =
         print("[ERROR] openpyxl is not installed. Please run pip install -r requirements.txt to install it.")
         sys.exit(1)
         
-    platform = platform or config.default_platform
+    platform = normalize_generate_platform(platform)
     
     filepath = config.excel_file
     if not os.path.exists(filepath):
@@ -403,8 +413,15 @@ def execute_run(keywords_path: str, platform: str = None, limit: int = None):
             target_ids = [(item.keyword, item.id) for item in saved_news]
         else:
             target_ids = [item.id for item in saved_news]
-            
-    execute_generate(platform, limit, target_ids=target_ids)
+
+    # Harvest limit applies only to newly saved rows. When nothing new was saved,
+    # backfill every row that still has missing platform drafts.
+    generate_limit = limit if target_ids else None
+    execute_generate(
+        normalize_generate_platform(platform),
+        generate_limit,
+        target_ids=target_ids,
+    )
     print("=== Full Draft Pipeline Completed ===")
 
 def execute_post(item_id: int, platform: str = None, sheet: str = None):

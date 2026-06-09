@@ -4,6 +4,7 @@ import tempfile
 import unittest
 import datetime
 import sqlite3
+from unittest.mock import patch
 
 from src.config import AppConfig
 from src.scheduler import (
@@ -15,7 +16,10 @@ from src.scheduler import (
     list_schedules,
     list_run_history,
     get_run_history_detail,
+    get_active_manual_draft_run,
     run_schedule_job,
+    run_manual_draft_job,
+    start_manual_draft_run,
     trigger_due_schedules,
     get_db_connection
 )
@@ -181,12 +185,63 @@ class TestScheduler(unittest.TestCase):
         
         # Call trigger_due_schedules (should launch due-job in background thread)
         # We can test run_schedule_job directly to verify behavior without waiting for thread
-        run_schedule_job(self.db_path, sch_id_due, "scheduled", self.config)
+        from unittest.mock import patch
+        with patch("main.execute_run") as mock_execute_run:
+            mock_execute_run.return_value = []
+            run_schedule_job(self.db_path, sch_id_due, "scheduled", self.config)
         
         # Verify run was created and marked as completed/failed
         history = list_run_history(self.db_path)
         self.assertEqual(len(history), 1)
         self.assertEqual(history[0]["schedule_id"], sch_id_due)
+
+    def test_manual_draft_run_records_history(self):
+        keywords_path = os.path.join(self.test_dir, "keywords.txt")
+        with open(keywords_path, "w", encoding="utf-8") as f:
+            f.write("Fintech trillion $\n")
+
+        with patch("main.execute_run") as mock_execute_run:
+            mock_execute_run.return_value = None
+            run_manual_draft_job(
+                self.db_path,
+                self.config,
+                keywords_path=keywords_path,
+                platforms=["linkedin"],
+                limit=2,
+                explicit_run_id="manual-draft-1",
+            )
+
+        history = list_run_history(self.db_path)
+        self.assertEqual(len(history), 1)
+        run = history[0]
+        self.assertIsNone(run["schedule_id"])
+        self.assertEqual(run["trigger_type"], "manual")
+        self.assertEqual(run["status"], "completed")
+        self.assertIn("Platform runs succeeded: 1", run["summary"])
+
+        detail = get_run_history_detail(self.db_path, "manual-draft-1")
+        self.assertIsNotNone(detail)
+        self.assertEqual(len(detail["details"]), 1)
+        self.assertEqual(detail["details"][0]["platform"], "linkedin")
+        self.assertEqual(detail["details"][0]["status"], "success")
+
+    def test_start_manual_draft_run_rejects_overlap(self):
+        init_db(self.db_path)
+        conn = get_db_connection(self.db_path)
+        c = conn.cursor()
+        c.execute("""
+            INSERT INTO runs (schedule_id, run_id, status, trigger_type, started_at)
+            VALUES (NULL, 'manual-running', 'running', 'manual', '2026-06-09T10:00:00')
+        """)
+        conn.commit()
+        conn.close()
+
+        active_run = get_active_manual_draft_run(self.db_path)
+        self.assertIsNotNone(active_run)
+        self.assertEqual(active_run["run_id"], "manual-running")
+
+        with self.assertRaises(ValueError):
+            start_manual_draft_run(self.db_path, self.config)
 
 if __name__ == "__main__":
     unittest.main()

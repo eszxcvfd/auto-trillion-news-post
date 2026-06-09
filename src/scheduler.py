@@ -72,6 +72,16 @@ def init_db(db_path: str):
     )
     """)
     
+    # Platform Sessions Table (session operational status & metadata)
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS platform_sessions (
+        platform TEXT PRIMARY KEY,
+        status TEXT NOT NULL,
+        last_checked_at TEXT,
+        metadata TEXT
+    )
+    """)
+    
     conn.commit()
     conn.close()
 
@@ -307,11 +317,204 @@ def get_run_history_detail(db_path: str, run_id: str) -> Optional[Dict[str, Any]
     run_dict["details"] = [dict(d) for d in detail_rows]
     return run_dict
 
+def get_active_manual_draft_run(db_path: str) -> Optional[Dict[str, Any]]:
+    """Returns the newest active manual draft run that is not tied to a schedule."""
+    init_db(db_path)
+    conn = get_db_connection(db_path)
+    c = conn.cursor()
+    c.execute("""
+    SELECT *
+    FROM runs
+    WHERE schedule_id IS NULL AND trigger_type = 'manual' AND status = 'running'
+    ORDER BY started_at DESC
+    LIMIT 1
+    """)
+    row = c.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+def save_platform_session_status(db_path: str, platform: str, status: str, metadata: Optional[str] = None):
+    """Saves or updates the session status of a platform in the SQLite store."""
+    init_db(db_path)
+    conn = get_db_connection(db_path)
+    c = conn.cursor()
+    now_str = datetime.datetime.now().isoformat()
+    c.execute("""
+    INSERT INTO platform_sessions (platform, status, last_checked_at, metadata)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(platform) DO UPDATE SET
+        status=excluded.status,
+        last_checked_at=excluded.last_checked_at,
+        metadata=coalesce(excluded.metadata, platform_sessions.metadata)
+    """, (platform, status, now_str, metadata))
+    conn.commit()
+    conn.close()
+
+def get_platform_sessions_status(db_path: str) -> Dict[str, Any]:
+    """Returns status mapping for all platform session configurations."""
+    init_db(db_path)
+    conn = get_db_connection(db_path)
+    c = conn.cursor()
+    c.execute("SELECT * FROM platform_sessions")
+    rows = c.fetchall()
+    conn.close()
+    
+    result = {}
+    for r in rows:
+        result[r["platform"]] = {
+            "status": r["status"],
+            "last_checked_at": r["last_checked_at"],
+            "metadata": r["metadata"]
+        }
+    return result
+
+def start_manual_draft_run(
+    db_path: str,
+    config: AppConfig,
+    keywords_path: str = "keywords.txt",
+    platforms: Optional[List[Optional[str]]] = None,
+    limit: Optional[int] = None,
+) -> str:
+    """Starts a one-off manual harvest-and-generate run and returns its run id."""
+    init_db(db_path)
+    active_run = get_active_manual_draft_run(db_path)
+    if active_run is not None:
+        raise ValueError("A manual draft run is already in progress.")
+
+    run_id = str(uuid.uuid4())
+    normalized_platforms = platforms or [None]
+
+    t = threading.Thread(
+        target=run_manual_draft_job,
+        args=(db_path, config, keywords_path, normalized_platforms, limit, run_id),
+    )
+    t.daemon = True
+    t.start()
+    return run_id
+
+def run_manual_draft_job(
+    db_path: str,
+    config: AppConfig,
+    keywords_path: str = "keywords.txt",
+    platforms: Optional[List[Optional[str]]] = None,
+    limit: Optional[int] = None,
+    explicit_run_id: Optional[str] = None,
+):
+    """Executes a one-off manual harvest-and-generate run and records durable history."""
+    init_db(db_path)
+    run_id = explicit_run_id or str(uuid.uuid4())
+    started_at = datetime.datetime.now().isoformat()
+    row_details: List[Tuple[str, int, str, str, str]] = []
+    status = "completed"
+    summary = ""
+    error_msg = None
+
+    conn = get_db_connection(db_path)
+    c = conn.cursor()
+    c.execute("""
+    INSERT INTO runs (schedule_id, run_id, status, trigger_type, started_at)
+    VALUES (NULL, ?, 'running', 'manual', ?)
+    """, (run_id, started_at))
+    conn.commit()
+    conn.close()
+
+    normalized_platforms = platforms or [None]
+
+    try:
+        if not os.path.exists(keywords_path):
+            raise FileNotFoundError(f"Keywords file not found at: {keywords_path}")
+
+        os.environ["EXCEL_FILE"] = os.path.abspath(config.excel_file)
+
+        from main import execute_run
+
+        success_count = 0
+        error_count = 0
+
+        for platform_name in normalized_platforms:
+            platform_label = platform_name or config.default_platform or "default"
+            try:
+                execute_run(keywords_path, platform=platform_name, limit=limit)
+                success_count += 1
+                row_details.append((
+                    "Workbook",
+                    0,
+                    platform_label,
+                    "success",
+                    f"Harvest and generation completed using '{keywords_path}'.",
+                ))
+            except SystemExit as exc:
+                error_count += 1
+                code = exc.code if exc.code is not None else 1
+                row_details.append((
+                    "Workbook",
+                    0,
+                    platform_label,
+                    "error",
+                    f"Draft pipeline exited early with code {code}.",
+                ))
+            except Exception as exc:
+                error_count += 1
+                row_details.append((
+                    "Workbook",
+                    0,
+                    platform_label,
+                    "error",
+                    str(exc),
+                ))
+
+        if success_count > 0 and error_count > 0:
+            status = "partial"
+        elif success_count == 0 and error_count > 0:
+            status = "failed"
+        else:
+            status = "completed"
+
+        summary = (
+            "Manual harvest and generation complete. "
+            f"Platform runs succeeded: {success_count}, failed: {error_count}."
+        )
+    except Exception as exc:
+        status = "failed"
+        error_msg = str(exc)
+        summary = "Manual harvest and generation failed."
+        row_details.append(("Workbook", 0, "draft-run", "error", error_msg))
+        print(f"[SCHEDULER ERROR] Manual draft run failed: {exc}", file=sys.stderr)
+
+    finished_at = datetime.datetime.now().isoformat()
+    conn = get_db_connection(db_path)
+    c = conn.cursor()
+    c.execute("""
+    UPDATE runs
+    SET status = ?, finished_at = ?, summary = ?, error_message = ?
+    WHERE run_id = ?
+    """, (status, finished_at, summary, error_msg, run_id))
+
+    for details in row_details:
+        c.execute("""
+        INSERT INTO run_details (run_id, sheet_name, row_id, platform, status, message)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """, (run_id, details[0], details[1], details[2], details[3], details[4]))
+
+    conn.commit()
+    conn.close()
+
 # --- Background Scheduler Execution logic ---
 
 # Coordinator event hook to handle active posting confirms via Web UI
 scheduler_active_job = None
 scheduler_active_job_lock = threading.Lock()
+
+ACTIVE_POSTING_STATUSES = ("preparing", "pending-operator")
+TERMINAL_POSTING_STATUSES = ("success", "skipped", "error")
+
+
+def _release_scheduler_active_job(job) -> None:
+    """Clear the scheduler posting job once it reaches a terminal state."""
+    global scheduler_active_job
+    with scheduler_active_job_lock:
+        if scheduler_active_job is job and scheduler_active_job.status in TERMINAL_POSTING_STATUSES:
+            scheduler_active_job = None
 
 def trigger_due_schedules(db_path: str, config: AppConfig):
     """Checks for due schedules and launches them in a background thread."""
@@ -447,7 +650,13 @@ def run_schedule_job(db_path: str, schedule_id: int, trigger_type: str, config: 
                 row_details.append(("Workbook", 0, "Ingest", "warning", w))
                 
             # Build posting plan
-            plan = build_posting_plan(rows, platforms, limit_per_platform=limit)
+            plan = build_posting_plan(
+                rows,
+                platforms,
+                limit_per_platform=limit,
+                config=config,
+                workbook_path=excel_path,
+            )
             
             # Log skipped/excluded detail
             for skip_info in plan.skipped_summary:
@@ -476,27 +685,25 @@ def run_schedule_job(db_path: str, schedule_id: int, trigger_type: str, config: 
                         with scheduler_active_job_lock:
                             scheduler_active_job = job
                             
-                        # Resolve draft content path if file exists
                         draft_content = cand.draft_content
                         if draft_content and isinstance(draft_content, str):
-                            test_paths = [
+                            from src.draft_paths import load_draft_from_cell
+
+                            resolved_draft = load_draft_from_cell(
                                 draft_content,
-                                os.path.join(os.path.dirname(excel_path), draft_content) if excel_path else "",
-                                os.path.join(config.post_dir, os.path.basename(draft_content)) if hasattr(config, "post_dir") else ""
-                            ]
-                            for p in test_paths:
-                                if p and os.path.exists(p) and os.path.isfile(p):
-                                    from src.assisted_posting import parse_post_markdown
-                                    parsed = parse_post_markdown(p)
-                                    if parsed:
-                                        draft_content = parsed
-                                        break
+                                excel_path,
+                                getattr(config, "post_dir", None),
+                            )
+                            if resolved_draft is not None:
+                                draft_content = resolved_draft
                                         
                         # NewsItem mock wrapper
                         item = NewsItem(id=cand.id, title=cand.title, image_file=cand.image_link, platform=platform_name, status="new")
                         
                         # Non-blocking confirm callback with 5-minute timeout
                         def confirm_callback():
+                            if job.skip_requested or job.action_type == "skip":
+                                return False, None
                             job.status = "pending-operator"
                             # Wait up to 300 seconds for operator confirmation in Web UI
                             signaled = job.action_received.wait(timeout=300)
@@ -530,9 +737,8 @@ def run_schedule_job(db_path: str, schedule_id: int, trigger_type: str, config: 
                             row_details.append((cand.sheet_name, cand.id, platform_name, "error", str(ex)))
                             error_count += 1
                             
-                        # Clear active job
-                        with scheduler_active_job_lock:
-                            scheduler_active_job = None
+                        # Clear active job once it reaches a terminal state
+                        _release_scheduler_active_job(job)
                             
                 # Determine final run status
                 if success_count > 0 and error_count > 0:
