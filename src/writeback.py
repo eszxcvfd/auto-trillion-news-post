@@ -1,8 +1,65 @@
 import os
+import re
 import shutil
 from datetime import datetime
 from typing import Optional, List, Tuple
 import openpyxl
+
+CANONICAL_WORKBOOK_FILENAME = "Trillion $ news.xlsx"
+WORKBOOK_BACKUP_DIRNAME = ".workbook-backups"
+MAX_WORKBOOK_BACKUPS = 5
+_TIMESTAMPED_BACKUP_PATTERN = re.compile(
+    r"^Trillion \$ news\.\d{8}_\d{6}\.xlsx$"
+)
+
+
+def is_timestamped_workbook_backup(filename: str) -> bool:
+    """Return True for auto-generated timestamped workbook backup files."""
+    return bool(_TIMESTAMPED_BACKUP_PATTERN.match(os.path.basename(filename)))
+
+
+def canonical_workbook_path(output_dir: str) -> str:
+    """Return the single operator workbook path under the output directory."""
+    return os.path.join(os.path.abspath(output_dir), CANONICAL_WORKBOOK_FILENAME)
+
+
+def resolve_workbook_path(output_dir: str, configured_path: Optional[str] = None) -> str:
+    """
+    Resolve the active workbook path, rejecting timestamped backup filenames.
+    """
+    canonical = canonical_workbook_path(output_dir)
+    if not configured_path:
+        return canonical
+
+    abs_path = os.path.abspath(configured_path)
+    if is_timestamped_workbook_backup(abs_path):
+        return canonical
+    return abs_path
+
+
+def workbook_backup_dir(workbook_path: str) -> str:
+    output_dir = os.path.dirname(os.path.abspath(workbook_path)) or "."
+    return os.path.join(output_dir, WORKBOOK_BACKUP_DIRNAME)
+
+
+def prune_old_workbook_backups(backup_dir: str, max_keep: int = MAX_WORKBOOK_BACKUPS) -> None:
+    if not os.path.isdir(backup_dir):
+        return
+
+    backups = sorted(
+        (
+            os.path.join(backup_dir, name)
+            for name in os.listdir(backup_dir)
+            if name.endswith(".xlsx") and is_timestamped_workbook_backup(name)
+        ),
+        key=os.path.getmtime,
+        reverse=True,
+    )
+    for stale_path in backups[max_keep:]:
+        try:
+            os.remove(stale_path)
+        except OSError:
+            pass
 
 from src.models import BusinessWorkbookRow, PlatformPostState, LinkPostDocument
 from src.business_workbook import normalize_header
@@ -54,21 +111,24 @@ def is_workbook_locked(filepath: str) -> bool:
 
 def create_workbook_backup(filepath: str) -> str:
     """
-    Create a timestamped copy of the workbook in the same directory.
+    Create a timestamped copy of the workbook in output/.workbook-backups/.
     Returns the path to the backup file.
     """
     if not os.path.exists(filepath):
         raise FileNotFoundError(f"Workbook file '{filepath}' does not exist.")
-        
-    dir_name = os.path.dirname(filepath)
+
+    backup_dir = workbook_backup_dir(filepath)
+    os.makedirs(backup_dir, exist_ok=True)
+
     base_name = os.path.basename(filepath)
     name, ext = os.path.splitext(base_name)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     backup_name = f"{name}.{timestamp}{ext}"
-    backup_path = os.path.join(dir_name, backup_name)
-    
+    backup_path = os.path.join(backup_dir, backup_name)
+
     try:
         shutil.copy2(filepath, backup_path)
+        prune_old_workbook_backups(backup_dir)
         return backup_path
     except Exception as e:
         raise BackupFailureError(f"Failed to create workbook backup: {e}")

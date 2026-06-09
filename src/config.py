@@ -52,7 +52,15 @@ class AppConfig:
 
         # Directories
         self.output_dir = os.getenv("OUTPUT_DIR", "./output")
-        self.excel_file = os.getenv("EXCEL_FILE", os.path.join(self.output_dir, "Trillion $ news.xlsx"))
+        from src.writeback import resolve_workbook_path
+
+        self.excel_file = resolve_workbook_path(
+            self.output_dir,
+            os.getenv(
+                "EXCEL_FILE",
+                os.path.join(self.output_dir, "Trillion $ news.xlsx"),
+            ),
+        )
         self.image_dir = os.getenv("IMAGE_DIR", os.path.join(self.output_dir, "Ảnh Trillion $ news"))
         self.post_dir = os.getenv("POST_DIR", os.path.join(self.output_dir, "posts"))
         self.log_dir = os.getenv("LOG_DIR", os.path.join(self.output_dir, "logs"))
@@ -75,7 +83,7 @@ class AppConfig:
         if backup_val is not None:
             self.backup_enabled = backup_val.lower() == "true"
         else:
-            self.backup_enabled = posting_cfg.get("backup_enabled", True)
+            self.backup_enabled = posting_cfg.get("backup_enabled", False)
             if isinstance(self.backup_enabled, str):
                 self.backup_enabled = self.backup_enabled.lower() == "true"
 

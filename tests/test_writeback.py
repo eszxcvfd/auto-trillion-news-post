@@ -81,9 +81,19 @@ class TestWriteback(unittest.TestCase):
             if os.path.exists(ms_office_lock):
                 os.remove(ms_office_lock)
 
+    def test_resolve_workbook_path_rejects_backup_filename(self):
+        from src.writeback import resolve_workbook_path, WORKBOOK_BACKUP_DIRNAME
+
+        canonical = resolve_workbook_path(self.test_dir)
+        backup_like = os.path.join(self.test_dir, "Trillion $ news.20260609_090724.xlsx")
+        self.assertEqual(resolve_workbook_path(self.test_dir, backup_like), canonical)
+
     def test_create_workbook_backup(self):
+        from src.writeback import WORKBOOK_BACKUP_DIRNAME
+
         backup_path = create_workbook_backup(self.workbook_path)
         self.assertTrue(os.path.exists(backup_path))
+        self.assertIn(WORKBOOK_BACKUP_DIRNAME, backup_path)
         self.assertIn("Trillion $ news.", backup_path)
         self.assertTrue(backup_path.endswith(".xlsx"))
         
@@ -163,9 +173,14 @@ class TestWriteback(unittest.TestCase):
             backup_enabled=True
         )
         
-        # Verify backup file created in test dir
-        files = os.listdir(self.test_dir)
-        backups = [f for f in files if f.startswith("Trillion $ news.") and len(f) > len("Trillion $ news.xlsx")]
+        from src.writeback import WORKBOOK_BACKUP_DIRNAME, is_timestamped_workbook_backup
+
+        backup_dir = os.path.join(self.test_dir, WORKBOOK_BACKUP_DIRNAME)
+        self.assertTrue(os.path.isdir(backup_dir))
+        backups = [
+            f for f in os.listdir(backup_dir)
+            if is_timestamped_workbook_backup(f)
+        ]
         self.assertEqual(len(backups), 1)
 
     def test_write_post_result_failures(self):
