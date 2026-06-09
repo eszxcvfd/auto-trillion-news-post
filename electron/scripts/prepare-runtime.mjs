@@ -49,9 +49,12 @@ function downloadStandalonePython(archivePath) {
   run('curl', ['-fL', url, '-o', archivePath]);
 }
 
-function extractStandalonePython(archivePath) {
+function extractStandalonePython() {
   fs.mkdirSync(venvDir, { recursive: true });
-  run('tar', ['-xzf', archivePath, '-C', venvDir, '--strip-components=1', 'python']);
+  // Use paths relative to runtimeRoot so Git Bash tar on Windows can extract safely.
+  run('tar', ['-xzf', 'python-standalone.tar.gz', '-C', 'venv', '--strip-components=1', 'python'], {
+    cwd: runtimeRoot,
+  });
 }
 
 function installPythonDependencies(python) {
@@ -73,7 +76,7 @@ function main() {
   fs.mkdirSync(runtimeRoot, { recursive: true });
 
   downloadStandalonePython(archivePath);
-  extractStandalonePython(archivePath);
+  extractStandalonePython();
   fs.rmSync(archivePath, { force: true });
 
   const python = pythonBin('python3');
