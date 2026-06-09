@@ -32,12 +32,43 @@ function userDataRoot() {
   return app.getPath('userData');
 }
 
+function resolvePackagedPython() {
+  const binDir = process.platform === 'win32'
+    ? path.join(process.resourcesPath, 'python-venv', 'Scripts')
+    : path.join(process.resourcesPath, 'python-venv', 'bin');
+  const names = process.platform === 'win32'
+    ? ['python.exe', 'python3.exe']
+    : ['python3', 'python3.12', 'python'];
+
+  for (const name of names) {
+    const candidate = path.join(binDir, name);
+    if (!fs.existsSync(candidate)) {
+      continue;
+    }
+    try {
+      const stat = fs.lstatSync(candidate);
+      if (stat.isSymbolicLink()) {
+        const target = fs.readlinkSync(candidate);
+        const resolved = path.isAbsolute(target)
+          ? target
+          : path.resolve(path.dirname(candidate), target);
+        if (fs.existsSync(resolved)) {
+          return candidate;
+        }
+        continue;
+      }
+      return candidate;
+    } catch (error) {
+      log.warn('Skipping invalid bundled Python candidate', candidate, error);
+    }
+  }
+
+  return path.join(binDir, process.platform === 'win32' ? 'python.exe' : 'python3');
+}
+
 function pythonExecutable() {
   if (isPackaged()) {
-    if (process.platform === 'win32') {
-      return path.join(process.resourcesPath, 'python-venv', 'Scripts', 'python.exe');
-    }
-    return path.join(process.resourcesPath, 'python-venv', 'bin', 'python3');
+    return resolvePackagedPython();
   }
 
   const candidates = [

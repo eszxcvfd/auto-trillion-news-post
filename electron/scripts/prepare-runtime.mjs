@@ -32,19 +32,20 @@ function main() {
   fs.mkdirSync(browsersDir, { recursive: true });
 
   const pythonLauncher = process.env.PYTHON || (process.platform === 'win32' ? 'python' : 'python3');
-  run(pythonLauncher, ['-m', 'venv', venvDir]);
+  // --copies embeds real Python binaries instead of CI-only symlinks.
+  run(pythonLauncher, ['-m', 'venv', venvDir, '--copies']);
 
   const python = pythonBin('python');
   run(python, ['-m', 'pip', 'install', '--upgrade', 'pip']);
   run(python, ['-m', 'pip', 'install', '-r', path.join(repoRoot, 'requirements.txt')]);
-
-  const playwright = pythonBin('playwright');
-  run(playwright, ['install', 'chromium'], {
+  run(python, ['-m', 'playwright', 'install', 'chromium'], {
     env: {
       ...process.env,
       PLAYWRIGHT_BROWSERS_PATH: browsersDir,
     },
   });
+
+  run(process.execPath, [path.join(__dirname, 'verify-portable-venv.mjs')]);
 
   console.log(`[prepare-runtime] venv: ${venvDir}`);
   console.log(`[prepare-runtime] browsers: ${browsersDir}`);

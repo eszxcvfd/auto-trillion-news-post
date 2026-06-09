@@ -54,6 +54,10 @@ jobs:
         shell: bash
         run: node electron/scripts/prepare-runtime.mjs
 
+      - name: Verify portable Python bundle
+        shell: bash
+        run: node electron/scripts/verify-portable-venv.mjs
+
       - name: Stage application files
         run: node electron/scripts/stage-app.mjs
 

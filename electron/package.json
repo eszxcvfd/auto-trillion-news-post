@@ -1,6 +1,6 @@
 {
   "name": "trillion-news-post-desktop",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Desktop operator surface for Trillion News Auto Post System",
   "main": "main.js",
   "author": "Trillion News",
