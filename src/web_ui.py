@@ -10,9 +10,19 @@ from flask import Flask, jsonify, request, send_from_directory, render_template
 from src.config import AppConfig
 from src.models import NewsItem
 from src.business_workbook import (
+    delete_workbook_row,
     detect_workbook_type,
     filter_dashboard_workbook_rows,
     ingest_business_workbook,
+    regenerate_linkedin_draft_for_row,
+)
+from src.keywords_store import (
+    KeywordRecord,
+    keyword_records_to_api,
+    load_keyword_records,
+    normalize_keyword_records,
+    resolve_keywords_path,
+    save_keyword_records,
 )
 from src.platform_capabilities import (
     PROJECT_DEFAULT_PLATFORM,
@@ -40,6 +50,15 @@ from src.writeback import (
     write_post_result,
 )
 from src.assisted_posting import run_assisted_posting
+from src.post_draft_store import (
+    linkedin_draft_file_for_row,
+    list_post_drafts,
+    post_draft_detail_to_api,
+    post_draft_record_to_api,
+    read_post_draft,
+    resolve_post_dir,
+    save_post_draft,
+)
 
 app = Flask(__name__, template_folder=os.path.join(os.path.dirname(__file__), 'templates'))
 
@@ -62,6 +81,10 @@ def _row_to_api_dict(row, config: AppConfig, workbook_path: str) -> Dict[str, An
         config=config,
         workbook_path=workbook_path,
         manual_retry=True,
+    )
+    row_dict["linkedin_draft_file"] = linkedin_draft_file_for_row(
+        getattr(row, "linkedin_draft_ref", None),
+        config,
     )
     return row_dict
 
@@ -275,6 +298,189 @@ def inspect_workbook():
             "error": f"Failed to inspect workbook: {e}",
             "path": os.path.abspath(filepath)
         }), 500
+
+@app.route('/api/posts', methods=['GET'])
+def list_posts_api():
+    """List markdown post drafts under POST_DIR."""
+    config = AppConfig()
+    query = request.args.get("q", default="", type=str)
+    records = list_post_drafts(config, query=query.strip() or None)
+    return jsonify({
+        "post_dir": resolve_post_dir(config=config),
+        "posts": [post_draft_record_to_api(record) for record in records],
+        "count": len(records),
+    })
+
+
+@app.route('/api/posts/<path:relative_path>', methods=['GET'])
+def get_post_draft_api(relative_path: str):
+    """Return one post draft with parsed sections for the editor."""
+    config = AppConfig()
+    try:
+        detail = read_post_draft(config, relative_path)
+        return jsonify(post_draft_detail_to_api(detail))
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except FileNotFoundError as e:
+        return jsonify({"error": str(e)}), 404
+    except Exception as e:
+        return jsonify({"error": f"Failed to read post draft: {e}"}), 500
+
+
+@app.route('/api/posts/<path:relative_path>', methods=['PUT'])
+def put_post_draft_api(relative_path: str):
+    """Save the Generated Post body for one markdown draft."""
+    config = AppConfig()
+    data = request.get_json(silent=True) or {}
+    generated_post = data.get("generated_post")
+    if generated_post is None:
+        return jsonify({"error": "generated_post is required"}), 400
+    if not isinstance(generated_post, str):
+        return jsonify({"error": "generated_post must be a string"}), 400
+
+    try:
+        detail = save_post_draft(config, relative_path, generated_post)
+        print(
+            f"[INFO] post_draft_save path={detail.relative_path} "
+            f"bytes={len(generated_post.encode('utf-8'))} status=success"
+        )
+        return jsonify({
+            "message": "Post draft saved",
+            "post": post_draft_detail_to_api(detail),
+        })
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 423
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except FileNotFoundError as e:
+        return jsonify({"error": str(e)}), 404
+    except Exception as e:
+        return jsonify({"error": f"Failed to save post draft: {e}"}), 500
+
+
+@app.route('/api/keywords', methods=['GET'])
+def get_keywords():
+    """Return the canonical harvest keyword list with enabled state."""
+    path = resolve_keywords_path()
+    records = load_keyword_records(path)
+    return jsonify({
+        "path": path,
+        "keywords": keyword_records_to_api(records),
+        "active_count": sum(1 for record in records if record.enabled),
+    })
+
+
+@app.route('/api/keywords', methods=['PUT'])
+def put_keywords():
+    """Replace the full keyword list after validation."""
+    data = request.get_json(silent=True) or {}
+    raw_keywords = data.get("keywords")
+    if not isinstance(raw_keywords, list):
+        return jsonify({"error": "keywords must be a list"}), 400
+
+    try:
+        records = [
+            KeywordRecord(
+                text=str(item.get("text", "")),
+                enabled=bool(item.get("enabled", True)),
+            )
+            for item in raw_keywords
+        ]
+        normalized = normalize_keyword_records(records)
+        path = save_keyword_records(normalized)
+        print(
+            f"[INFO] keywords_save path={path} count={len(normalized)} "
+            f"active={sum(1 for record in normalized if record.enabled)}"
+        )
+        return jsonify({
+            "message": "Keywords saved",
+            "path": path,
+            "keywords": keyword_records_to_api(normalized),
+            "active_count": sum(1 for record in normalized if record.enabled),
+        })
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        return jsonify({"error": f"Failed to save keywords: {e}"}), 500
+
+
+@app.route('/api/workbook/rows', methods=['DELETE'])
+def delete_workbook_row_api():
+    """Delete one article row from the active workbook (backup first)."""
+    data = request.get_json(silent=True) or {}
+    sheet_name = (data.get("sheet_name") or "").strip()
+    row_idx = data.get("row_idx")
+
+    if not sheet_name:
+        return jsonify({"error": "sheet_name is required"}), 400
+    if row_idx is None:
+        return jsonify({"error": "row_idx is required"}), 400
+
+    config = AppConfig()
+    filepath = config.excel_file
+    if not os.path.exists(filepath):
+        return jsonify({"error": "Active workbook does not exist"}), 404
+
+    try:
+        result = delete_workbook_row(config, sheet_name=sheet_name, row_idx=row_idx)
+        print(
+            f"[INFO] workbook_row_delete sheet={sheet_name} row_idx={row_idx} "
+            f"row_id={result.get('row_id')} status=success"
+        )
+        return jsonify({
+            "message": "Workbook row deleted",
+            "result": result,
+        })
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 423
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except FileNotFoundError as e:
+        return jsonify({"error": str(e)}), 404
+    except Exception as e:
+        return jsonify({"error": f"Failed to delete workbook row: {e}"}), 500
+
+
+@app.route('/api/workbook/rows/regenerate-draft', methods=['POST'])
+def regenerate_workbook_row_draft():
+    """Regenerate the LinkedIn draft for one workbook row."""
+    data = request.get_json(silent=True) or {}
+    sheet_name = (data.get("sheet_name") or "").strip()
+    row_idx = data.get("row_idx")
+
+    if not sheet_name:
+        return jsonify({"error": "sheet_name is required"}), 400
+    if row_idx is None:
+        return jsonify({"error": "row_idx is required"}), 400
+
+    config = AppConfig()
+    filepath = config.excel_file
+    if not os.path.exists(filepath):
+        return jsonify({"error": "Active workbook does not exist"}), 404
+
+    try:
+        result = regenerate_linkedin_draft_for_row(
+            config,
+            sheet_name=sheet_name,
+            row_idx=row_idx,
+        )
+        print(
+            f"[INFO] workbook_row_regenerate sheet={sheet_name} row_idx={row_idx} "
+            f"row_id={result.get('row_id')} platform={result.get('platform')} status=success"
+        )
+        return jsonify({
+            "message": "LinkedIn draft regenerated",
+            "result": result,
+        })
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 423
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except FileNotFoundError as e:
+        return jsonify({"error": str(e)}), 404
+    except Exception as e:
+        return jsonify({"error": f"Failed to regenerate LinkedIn draft: {e}"}), 500
+
 
 @app.route('/api/workbook/repair-drafts', methods=['POST'])
 def repair_workbook_drafts():
