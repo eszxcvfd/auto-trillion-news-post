@@ -1,8 +1,14 @@
 import os
-from typing import Dict, Optional, Tuple
+from typing import Dict, Iterable, List, Optional, Tuple
 
 from src.config import AppConfig
 from src.posting_core import canonicalize_platform, PLATFORM_CANONICAL
+
+PROJECT_DEFAULT_PLATFORM = "linkedin"
+PROJECT_SUPPORTED_PLATFORMS = (PROJECT_DEFAULT_PLATFORM,)
+PROJECT_SUPPORTED_PLATFORM_SET = set(PROJECT_SUPPORTED_PLATFORMS)
+PROJECT_SUPPORTED_PLATFORM_CSV = ",".join(PROJECT_SUPPORTED_PLATFORMS)
+PROJECT_DEFAULT_PLATFORM_LABEL = PLATFORM_CANONICAL[PROJECT_DEFAULT_PLATFORM]
 
 # MVP capability matrix from SPEC.md section 8.12
 PLATFORM_CAPABILITIES: Dict[str, Dict[str, object]] = {
@@ -27,52 +33,63 @@ PLATFORM_CAPABILITIES: Dict[str, Dict[str, object]] = {
 }
 
 # Platforms with assisted posting adapters in the current release slice.
-SUPPORTED_POSTING_PLATFORMS = {
-    "linkedin",
-    "facebook",
-    "x",
-    "instagram",
-    "pinterest",
-    "threads",
-    "tiktok",
-    "youtube",
-}
+SUPPORTED_POSTING_PLATFORMS = set(PROJECT_SUPPORTED_PLATFORMS)
 
-BEST_EFFORT_POSTING_PLATFORMS = {"tiktok", "youtube"}
+BEST_EFFORT_POSTING_PLATFORMS = set()
 
 # Platforms with session onboarding/check support in Web UI.
-SUPPORTED_SESSION_PLATFORMS = {
-    "linkedin",
-    "facebook",
-    "x",
-    "instagram",
-    "pinterest",
-    "threads",
-    "tiktok",
-    "youtube",
-}
+SUPPORTED_SESSION_PLATFORMS = set(PROJECT_SUPPORTED_PLATFORMS)
 
 SESSION_DOMAINS = {
     "linkedin": "linkedin.com",
-    "facebook": "facebook.com",
-    "x": "x.com",
-    "instagram": "instagram.com",
-    "pinterest": "pinterest.com",
-    "threads": "threads.net",
-    "tiktok": "tiktok.com",
-    "youtube": "youtube.com",
 }
 
 SESSION_LOGIN_URLS = {
     "linkedin": "https://www.linkedin.com/login",
-    "facebook": "https://www.facebook.com/login/",
-    "x": "https://x.com/i/flow/login",
-    "instagram": "https://www.instagram.com/accounts/login/",
-    "pinterest": "https://www.pinterest.com/login/",
-    "threads": "https://www.threads.net/login",
-    "tiktok": "https://www.tiktok.com/login",
-    "youtube": "https://accounts.google.com/signin",
 }
+
+
+def normalize_project_platform(platform: Optional[str], strict: bool = True) -> str:
+    """Resolve the only active project platform, rejecting non-LinkedIn requests when strict."""
+    raw = "" if platform is None else str(platform).strip()
+    if not raw or raw.lower() in {"all", "none"}:
+        return PROJECT_DEFAULT_PLATFORM
+
+    platform_key = canonicalize_platform(raw)
+    if platform_key in PROJECT_SUPPORTED_PLATFORM_SET:
+        return platform_key
+    if strict:
+        display = PLATFORM_CANONICAL[platform_key]
+        raise ValueError(
+            f"This project is scoped to {PROJECT_DEFAULT_PLATFORM_LABEL} only. "
+            f"'{display}' is no longer supported."
+        )
+    return PROJECT_DEFAULT_PLATFORM
+
+
+def normalize_project_platforms(
+    platforms: Optional[Iterable[Optional[str]]],
+    strict: bool = True,
+) -> List[str]:
+    """Collapse any platform selection into the project's fixed LinkedIn-only scope."""
+    if not platforms:
+        return [PROJECT_DEFAULT_PLATFORM]
+
+    for platform in platforms:
+        normalize_project_platform(platform, strict=strict)
+    return [PROJECT_DEFAULT_PLATFORM]
+
+
+def normalize_project_platforms_csv(
+    platforms_raw: Optional[str],
+    strict: bool = True,
+) -> str:
+    """Normalize a comma-separated platform list for storage or UI requests."""
+    if not platforms_raw or not str(platforms_raw).strip():
+        return PROJECT_SUPPORTED_PLATFORM_CSV
+    parts = [p.strip() for p in str(platforms_raw).split(",") if p.strip()]
+    normalize_project_platforms(parts, strict=strict)
+    return PROJECT_SUPPORTED_PLATFORM_CSV
 
 
 def is_best_effort_posting(platform: str) -> bool:

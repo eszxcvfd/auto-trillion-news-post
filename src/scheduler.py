@@ -10,7 +10,13 @@ from typing import List, Dict, Any, Tuple, Optional
 from src.config import AppConfig
 from src.models import NewsItem
 from src.business_workbook import ingest_business_workbook
-from src.posting_core import build_posting_plan, canonicalize_platform, PLATFORM_ATTRS
+from src.platform_capabilities import (
+    PROJECT_DEFAULT_PLATFORM,
+    PROJECT_SUPPORTED_PLATFORM_CSV,
+    normalize_project_platforms,
+    normalize_project_platforms_csv,
+)
+from src.posting_core import build_posting_plan
 from src.writeback import write_post_result
 from src.assisted_posting import run_assisted_posting
 from src.platform_workflows.registry import get_workflow_id
@@ -51,7 +57,7 @@ def init_db(db_path: str):
         next_run_at TEXT,
         workbook_path TEXT,
         sheet_name TEXT,
-        platforms TEXT,                    -- Comma-separated (e.g. "linkedin,facebook")
+        platforms TEXT,                    -- Fixed LinkedIn-only storage
         post_limit INTEGER DEFAULT 2
     )
     """)
@@ -206,6 +212,7 @@ def create_schedule(db_path: str, name: str, expression: str, job_type: str,
                     platforms: Optional[str] = None, post_limit: int = 2) -> int:
     """Creates a new schedule and computes its initial next_run_at."""
     init_db(db_path)
+    normalized_platforms = normalize_project_platforms_csv(platforms, strict=False)
     
     # Validate expression
     next_run = calculate_next_run(expression, datetime.datetime.now())
@@ -216,7 +223,7 @@ def create_schedule(db_path: str, name: str, expression: str, job_type: str,
     c.execute("""
     INSERT INTO schedules (name, expression, job_type, enabled, next_run_at, workbook_path, sheet_name, platforms, post_limit)
     VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?)
-    """, (name, expression, job_type, next_run_str, workbook_path, sheet_name, platforms, post_limit))
+    """, (name, expression, job_type, next_run_str, workbook_path, sheet_name, normalized_platforms, post_limit))
     schedule_id = c.lastrowid
     conn.commit()
     conn.close()
@@ -267,7 +274,7 @@ def update_schedule(db_path: str, name: str, expression: Optional[str] = None,
         params.append(sheet_name)
     if platforms is not None:
         updates.append("platforms = ?")
-        params.append(platforms)
+        params.append(normalize_project_platforms_csv(platforms, strict=False))
     if post_limit is not None:
         updates.append("post_limit = ?")
         params.append(post_limit)
@@ -402,7 +409,7 @@ def start_manual_draft_run(
         raise ValueError("A manual draft run is already in progress.")
 
     run_id = str(uuid.uuid4())
-    normalized_platforms = platforms or [None]
+    normalized_platforms = normalize_project_platforms(platforms, strict=False)
 
     t = threading.Thread(
         target=run_manual_draft_job,
@@ -438,7 +445,7 @@ def run_manual_draft_job(
     conn.commit()
     conn.close()
 
-    normalized_platforms = platforms or [None]
+    normalized_platforms = normalize_project_platforms(platforms, strict=False)
 
     try:
         if not os.path.exists(keywords_path):
@@ -452,7 +459,7 @@ def run_manual_draft_job(
         error_count = 0
 
         for platform_name in normalized_platforms:
-            platform_label = platform_name or config.default_platform or "default"
+            platform_label = platform_name or PROJECT_DEFAULT_PLATFORM
             try:
                 execute_run(keywords_path, platform=platform_name, limit=limit)
                 success_count += 1
@@ -498,7 +505,7 @@ def run_manual_draft_job(
         status = "failed"
         error_msg = str(exc)
         summary = "Manual harvest and generation failed."
-        row_details.append(("Workbook", 0, "draft-run", "error", error_msg))
+        row_details.append(("Workbook", 0, PROJECT_DEFAULT_PLATFORM, "error", error_msg))
         print(f"[SCHEDULER ERROR] Manual draft run failed: {exc}", file=sys.stderr)
 
     finished_at = datetime.datetime.now().isoformat()
@@ -633,7 +640,10 @@ def run_schedule_job(db_path: str, schedule_id: int, trigger_type: str, config: 
             keywords_file = "keywords.txt"
             limit = sch["post_limit"]
             platforms_str = sch["platforms"]
-            platforms = [p.strip() for p in platforms_str.split(",") if p.strip()] if platforms_str else [None]
+            platforms = normalize_project_platforms(
+                [p.strip() for p in platforms_str.split(",") if p.strip()] if platforms_str else None,
+                strict=False,
+            )
             
             print(f"[SCHEDULER] Starting draft generation for Run {run_id}")
             # Run for each platform
@@ -650,8 +660,11 @@ def run_schedule_job(db_path: str, schedule_id: int, trigger_type: str, config: 
             # Running Posting flow
             excel_path = sch["workbook_path"] or config.excel_file
             sheet_name = sch["sheet_name"]
-            platforms_str = sch["platforms"] or "linkedin,facebook,x,instagram,pinterest,threads,tiktok,youtube"
-            platforms = [p.strip() for p in platforms_str.split(",") if p.strip()]
+            platforms_str = sch["platforms"] or PROJECT_SUPPORTED_PLATFORM_CSV
+            platforms = normalize_project_platforms(
+                [p.strip() for p in platforms_str.split(",") if p.strip()],
+                strict=False,
+            )
             limit = sch["post_limit"]
             
             if not os.path.exists(excel_path):

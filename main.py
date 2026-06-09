@@ -4,6 +4,12 @@ import sys
 import json
 from src.config import AppConfig
 from src.models import NewsItem
+from src.platform_capabilities import (
+    PROJECT_DEFAULT_PLATFORM,
+    PROJECT_SUPPORTED_PLATFORM_CSV,
+    normalize_project_platform,
+    normalize_project_platforms_csv,
+)
 from src.searcher import search_news, sync_playwright as search_sync_playwright
 from src.filter import is_trillion_news, deduplicate_news
 
@@ -25,14 +31,13 @@ POST_DIR=./output/posts
 LOG_DIR=./output/logs
 
 # Run Limits & Preferences
-DEFAULT_PLATFORM=linkedin
 DEFAULT_LANGUAGE=en
 MAX_RESULTS_PER_KEYWORD=10
 MAX_POSTS_PER_RUN=5
 """
 
 DEFAULT_CONFIG_YAML = """# Default System Configuration
-platform: linkedin
+# Platform scope is fixed to LinkedIn for this project.
 language: en
 
 search:
@@ -117,7 +122,7 @@ def init_project():
             wb = openpyxl.Workbook()
             ws = wb.active
             ws.title = "Payment"
-            headers = ["#", "Trillion $ news Title", "Image link", "Linkedin", "Facebook", "X (Twitter)", "Instagram", "Pinterest", "Threads", "TikTok", "YouTube", "Link Post"]
+            headers = ["#", "Trillion $ news Title", "Image link", "Linkedin", "Link Post"]
             ws.append(headers)
             # Create a secondary default category sheet
             ws2 = wb.create_sheet(title="Charity & Tokenization")
@@ -230,13 +235,8 @@ def execute_search(keywords_path: str, limit: int = None):
     return saved_news
 
 def normalize_generate_platform(platform: str = None) -> str:
-    """Blank platform means generate drafts for every supported platform."""
-    if platform is None:
-        return "all"
-    cleaned = str(platform).strip().lower()
-    if not cleaned or cleaned == "none":
-        return "all"
-    return platform
+    """Draft generation is fixed to LinkedIn for this project."""
+    return normalize_project_platform(platform, strict=True)
 
 
 def execute_generate(platform: str = None, limit: int = None, target_ids: list = None):
@@ -426,6 +426,8 @@ def execute_run(keywords_path: str, platform: str = None, limit: int = None):
 
 def execute_post(item_id: int, platform: str = None, sheet: str = None):
     config = AppConfig()
+    if platform is not None:
+        platform = normalize_project_platform(platform, strict=True)
     
     try:
         import openpyxl
@@ -705,7 +707,8 @@ def execute_inspect_workbook(
         
     if as_plan:
         # Generate the plan
-        p_list = [p.strip() for p in platforms_str.split(",") if p.strip()]
+        normalized_platforms = normalize_project_platforms_csv(platforms_str, strict=True)
+        p_list = [p.strip() for p in normalized_platforms.split(",") if p.strip()]
         try:
             config = AppConfig()
             plan = build_posting_plan(
@@ -824,19 +827,19 @@ def main():
     
     # generate command
     generate_parser = subparsers.add_parser("generate", help="Generate AI social posts")
-    generate_parser.add_argument("--platform", default=None, help="Target social platform (e.g. linkedin)")
+    generate_parser.add_argument("--platform", default=None, help="Target social platform (LinkedIn only)")
     generate_parser.add_argument("--limit", type=int, default=None, help="Max posts to generate")
     
     # run command
     run_parser = subparsers.add_parser("run", help="Run full search and generation draft pipeline")
     run_parser.add_argument("--keywords", default="keywords.txt", help="Path to keywords file")
-    run_parser.add_argument("--platform", default=None, help="Target social platform")
+    run_parser.add_argument("--platform", default=None, help="Target social platform (LinkedIn only)")
     run_parser.add_argument("--limit", type=int, default=None, help="Max posts to generate/return")
     
     # post command
     post_parser = subparsers.add_parser("post", help="Assisted posting on social platforms")
     post_parser.add_argument("--id", type=int, required=True, help="Row ID from Excel to post")
-    post_parser.add_argument("--platform", default=None, help="Target social platform (e.g. linkedin)")
+    post_parser.add_argument("--platform", default=None, help="Target social platform (LinkedIn only)")
     post_parser.add_argument("--sheet", default=None, help="Optional specific sheet/category name for Business Workbook")
 
     # inspect-workbook command
@@ -846,13 +849,13 @@ def main():
     inspect_parser.add_argument("--json", action="store_true", help="Output in structured JSON format")
     inspect_parser.add_argument("--plan", action="store_true", help="Generate and inspect the posting plan (dry-run)")
     inspect_parser.add_argument("--limit", type=int, default=2, help="Posting limit per platform (default: 2)")
-    inspect_parser.add_argument("--platforms", default="linkedin,facebook,x,instagram,pinterest,threads,tiktok,youtube", help="Comma-separated platforms to plan for")
+    inspect_parser.add_argument("--platforms", default=PROJECT_SUPPORTED_PLATFORM_CSV, help="Comma-separated platforms to plan for (LinkedIn only)")
 
     # write-result command
     write_parser = subparsers.add_parser("write-result", help="Manually write a posting result to a row")
     write_parser.add_argument("--sheet", required=True, help="Name of the sheet/category")
     write_parser.add_argument("--row", type=int, required=True, help="1-based row index in the sheet")
-    write_parser.add_argument("--platform", required=True, help="Target platform name (e.g. linkedin)")
+    write_parser.add_argument("--platform", required=True, help="Target platform name (LinkedIn only)")
     write_parser.add_argument("--status", required=True, help="Status value to write (URL or tag)")
     write_parser.add_argument("--workbook", default=None, help="Path to the business workbook file")
     write_parser.add_argument("--no-backup", action="store_true", help="Disable timestamped workbook backup before write")
@@ -872,7 +875,7 @@ def main():
     add_parser.add_argument("--job-type", required=True, choices=["draft", "post"], help="Type of job (draft = harvest & generate, post = publishing)")
     add_parser.add_argument("--workbook", default=None, help="Custom workbook file path")
     add_parser.add_argument("--sheet", default=None, help="Specific sheet name to post from")
-    add_parser.add_argument("--platforms", default=None, help="Comma-separated platforms to post")
+    add_parser.add_argument("--platforms", default=None, help="Comma-separated platforms to post (LinkedIn only)")
     add_parser.add_argument("--limit", type=int, default=2, help="Posting limit per platform")
     
     # schedule list
@@ -1044,4 +1047,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

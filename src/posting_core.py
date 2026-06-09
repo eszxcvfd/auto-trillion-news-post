@@ -25,11 +25,9 @@ PLATFORM_CANONICAL = {
     "youtube": "YouTube"
 }
 
-# Stable ordering for manual platform selection prompts
-PLATFORM_ORDER = [
-    "linkedin", "facebook", "x", "instagram",
-    "pinterest", "threads", "tiktok", "youtube"
-]
+# Active project scope is LinkedIn-only even though historical workbooks may still
+# contain legacy draft columns for other platforms.
+PLATFORM_ORDER = ["linkedin"]
 
 # Inverse lookup for attribute names
 PLATFORM_ATTRS = {
@@ -145,6 +143,62 @@ def serialize_link_post_document(doc: LinkPostDocument) -> str:
         state = doc.states[k]
         lines.append(f"{state.platform}: {state.raw_value}")
     return "\n".join(lines)
+
+
+def filter_link_post_for_project_scope(raw_text: Optional[str]) -> Optional[str]:
+    """Keep only LinkedIn posting status lines for the LinkedIn-only project scope."""
+    if not raw_text:
+        return raw_text
+    try:
+        doc = parse_link_post_document(raw_text)
+    except ValueError:
+        return None
+    linkedin_state = doc.states.get("linkedin")
+    if not linkedin_state:
+        return None
+    return f"{linkedin_state.platform}: {linkedin_state.raw_value}"
+
+
+def has_linkedin_workbook_content(row: BusinessWorkbookRow) -> bool:
+    """Return True when a row has any LinkedIn draft or posting status worth showing operators."""
+    if row.linkedin_draft:
+        return True
+    if filter_link_post_for_project_scope(row.link_post_raw):
+        return True
+    if row.broken_draft_refs and "linkedin" in row.broken_draft_refs:
+        return True
+    return False
+
+
+def is_operator_stray_workbook_row(row: BusinessWorkbookRow) -> bool:
+    """Rows with a title but no LinkedIn footprint should not appear in operator surfaces."""
+    return bool(row.title) and not has_linkedin_workbook_content(row)
+
+
+def is_legacy_orphan_workbook_row(row: BusinessWorkbookRow) -> bool:
+    """
+    Detect workbook rows that only contain legacy non-LinkedIn platform residue.
+    These rows have a title but no LinkedIn draft and no LinkedIn posting status.
+    """
+    if not row.title:
+        return False
+
+    if row.linkedin_draft or filter_link_post_for_project_scope(row.link_post_raw):
+        return False
+
+    if row.broken_draft_refs:
+        return True
+
+    if row.link_post_raw and filter_link_post_for_project_scope(row.link_post_raw) is None:
+        return True
+
+    for attr_name in PLATFORM_ATTRS.values():
+        if attr_name == "linkedin_draft":
+            continue
+        if getattr(row, attr_name, None):
+            return True
+
+    return False
 
 
 def evaluate_row_eligibility(

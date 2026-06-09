@@ -66,7 +66,9 @@ class AppConfig:
         self.log_dir = os.getenv("LOG_DIR", os.path.join(self.output_dir, "logs"))
 
         # Posting preferences
-        self.default_platform = os.getenv("DEFAULT_PLATFORM", self.yaml_config.get("platform", "linkedin"))
+        self.default_platform = "linkedin"
+        self.platform_locked = True
+        self.supported_platforms = ("linkedin",)
         self.default_language = os.getenv("DEFAULT_LANGUAGE", self.yaml_config.get("language", "en"))
         self.max_posts_per_run = int(os.getenv("MAX_POSTS_PER_RUN", 5))
 

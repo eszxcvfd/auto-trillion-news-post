@@ -4,23 +4,12 @@ from typing import Callable, Dict, Optional, Tuple
 from src.config import AppConfig
 from src.models import NewsItem
 from src.platform_capabilities import is_posting_supported
-from src.platform_workflows.facebook_workflow import (
-    WORKFLOW_ID as FACEBOOK_WORKFLOW_ID,
-    run_facebook_posting,
-    validate_facebook_session,
-)
 from src.platform_workflows.linkedin_workflow import (
     WORKFLOW_ID as LINKEDIN_WORKFLOW_ID,
     run_linkedin_posting,
     validate_linkedin_session,
 )
 from src.platform_workflows.observability import log_workflow_result, log_workflow_start
-from src.platform_workflows.profile_workflow import (
-    PROFILE_WORKFLOW_PLATFORMS,
-    build_profile_workflow_registry,
-    run_profile_posting,
-    validate_profile_session,
-)
 from src.platform_workflows.types import PostingWorkflowContext, PostingWorkflowResult
 from src.posting_core import PLATFORM_CANONICAL, canonicalize_platform
 
@@ -46,31 +35,14 @@ class PlatformWorkflowRegistration:
 
 
 def _build_registry() -> Dict[str, PlatformWorkflowRegistration]:
-    entries = {
+    return {
         "linkedin": PlatformWorkflowRegistration(
             "linkedin",
             LINKEDIN_WORKFLOW_ID,
             run_linkedin_posting,
             validate_linkedin_session,
         ),
-        "facebook": PlatformWorkflowRegistration(
-            "facebook",
-            FACEBOOK_WORKFLOW_ID,
-            run_facebook_posting,
-            validate_facebook_session,
-        ),
     }
-
-    for platform_key in PROFILE_WORKFLOW_PLATFORMS:
-        entries[platform_key] = PlatformWorkflowRegistration(
-            platform_key,
-            f"workflow.{platform_key}.profile.v1",
-            lambda page, content, image, cb, key=platform_key: run_profile_posting(
-                key, page, content, image, cb
-            ),
-            lambda page, key=platform_key: validate_profile_session(key, page),
-        )
-    return entries
 
 
 WORKFLOW_REGISTRY: Dict[str, PlatformWorkflowRegistration] = _build_registry()
