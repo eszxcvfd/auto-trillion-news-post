@@ -1034,8 +1034,15 @@ def toggle_schedule(id):
     if not sch:
         return jsonify({"error": f"Schedule ID {id} not found"}), 404
         
-    data = request.json or {}
-    enabled_val = data.get("enabled")
+    # Never use request.json here: Content-Type application/json with an empty body
+    # makes Flask return 400 before this handler runs.
+    enabled_val = None
+    if request.content_length:
+        payload = request.get_json(silent=True)
+        if isinstance(payload, dict):
+            enabled_val = payload.get("enabled")
+    if enabled_val is None and request.args.get("enabled") is not None:
+        enabled_val = request.args.get("enabled", "").lower() in ("1", "true", "yes")
     if enabled_val is None:
         new_enabled = 0 if sch["enabled"] == 1 else 1
     else:

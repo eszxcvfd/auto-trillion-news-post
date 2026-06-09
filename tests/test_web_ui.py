@@ -398,5 +398,35 @@ class TestWebUI(unittest.TestCase):
         self.assertIn("written to workbook", data["message"])
         self.assertEqual(data["new_value"], "LinkedIn: https://linkedin.com/post/1")
 
+    def test_api_schedule_toggle_accepts_json_body(self):
+        from src.scheduler import create_schedule
+
+        config = AppConfig()
+        db_path = os.path.join(config.output_dir, "scheduler.db")
+        schedule_id = create_schedule(
+            db_path,
+            name="toggle-test",
+            expression="0 9 * * *",
+            job_type="draft",
+        )
+
+        # Frontend used to send Content-Type without a body; Flask rejects that.
+        response = self.client.post(
+            f"/api/schedules/{schedule_id}/toggle",
+            headers={"Content-Type": "application/json"},
+            data="",
+        )
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertFalse(data["enabled"])
+
+        response = self.client.post(
+            f"/api/schedules/{schedule_id}/toggle",
+            json={"enabled": True},
+        )
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertTrue(data["enabled"])
+
 if __name__ == "__main__":
     unittest.main()
