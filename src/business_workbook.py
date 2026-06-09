@@ -2,25 +2,37 @@ import os
 import openpyxl
 from typing import List, Dict, Optional, Tuple
 from src.models import NewsItem, BusinessWorkbookRow
+from src.platform_capabilities import (
+    PROJECT_DEFAULT_PLATFORM,
+    normalize_project_platform,
+)
 
-# Expected mapping of normalized column headers to BusinessWorkbookRow attributes
+# Required workbook columns for the current LinkedIn-only project scope.
 REQUIRED_MAPPING = {
     "#": "id",
     "trillion $ news title": "title",
     "image link": "image_link",
     "linkedin": "linkedin_draft",
+}
+
+# Legacy draft columns remain readable so existing workbooks do not need a schema migration.
+OPTIONAL_DRAFT_MAPPING = {
     "facebook": "facebook_draft",
     "x (twitter)": "x_draft",
     "instagram": "instagram_draft",
     "pinterest": "pinterest_draft",
     "threads": "threads_draft",
     "tiktok": "tiktok_draft",
-    "youtube": "youtube_draft"
+    "youtube": "youtube_draft",
 }
 
 OPTIONAL_MAPPING = {
-    "link post": "link_post_raw"
+    "link post": "link_post_raw",
 }
+
+ALL_DRAFT_MAPPING = dict(REQUIRED_MAPPING)
+ALL_DRAFT_MAPPING.update(OPTIONAL_DRAFT_MAPPING)
+DRAFT_ATTRS = set(ALL_DRAFT_MAPPING.values())
 
 
 def normalize_header(header_val) -> Optional[str]:
@@ -172,6 +184,8 @@ def ingest_business_workbook(filepath: str, sheet_scope: Optional[List[str]] = N
                     # Check if this header maps to a row property
                     if norm in REQUIRED_MAPPING:
                         header_map[idx + 1] = REQUIRED_MAPPING[norm]
+                    elif norm in OPTIONAL_DRAFT_MAPPING:
+                        header_map[idx + 1] = OPTIONAL_DRAFT_MAPPING[norm]
                     elif norm in OPTIONAL_MAPPING:
                         header_map[idx + 1] = OPTIONAL_MAPPING[norm]
             
@@ -204,6 +218,7 @@ def ingest_business_workbook(filepath: str, sheet_scope: Optional[List[str]] = N
                 
                 # Extract values based on header_map
                 row_data = {attr: None for attr in REQUIRED_MAPPING.values()}
+                row_data.update({attr: None for attr in OPTIONAL_DRAFT_MAPPING.values()})
                 row_data.update({attr: None for attr in OPTIONAL_MAPPING.values()})
                 
                 has_any_value = False
@@ -216,7 +231,7 @@ def ingest_business_workbook(filepath: str, sheet_scope: Optional[List[str]] = N
                             row_data[attr_name] = parse_row_id(val)
                         elif attr_name == "title":
                             row_data[attr_name] = normalize_cell_content(val)
-                        elif attr_name in ["linkedin_draft", "facebook_draft", "x_draft", "instagram_draft", "pinterest_draft", "threads_draft", "tiktok_draft", "youtube_draft"]:
+                        elif attr_name in DRAFT_ATTRS:
                             cell_str = normalize_cell_content(val)
                             if cell_str:
                                 from src.draft_paths import load_draft_from_cell, looks_like_file_reference
@@ -297,37 +312,22 @@ def map_news_item_to_business_row(news_item: NewsItem, row_idx: int) -> Business
     if not draft_content:
         draft_content = news_item.published_text or news_item.snippet
         
-    # Map the draft to the platform specified in NewsItem
-    platform_name = (news_item.platform or "linkedin").strip().lower()
+    # Project scope is LinkedIn-only for newly mapped rows.
+    platform_name = normalize_project_platform(news_item.platform, strict=False)
     
-    linkedin_draft = draft_content if "linkedin" in platform_name else None
-    facebook_draft = draft_content if "facebook" in platform_name else None
-    x_draft = draft_content if ("x" in platform_name or "twitter" in platform_name) else None
-    instagram_draft = draft_content if "instagram" in platform_name else None
-    pinterest_draft = draft_content if "pinterest" in platform_name else None
-    threads_draft = draft_content if "threads" in platform_name else None
-    tiktok_draft = draft_content if "tiktok" in platform_name else None
-    youtube_draft = draft_content if "youtube" in platform_name else None
+    linkedin_draft = draft_content if platform_name == PROJECT_DEFAULT_PLATFORM else None
+    facebook_draft = None
+    x_draft = None
+    instagram_draft = None
+    pinterest_draft = None
+    threads_draft = None
+    tiktok_draft = None
+    youtube_draft = None
     
     # Establish a default Link Post string
     link_post = None
     if news_item.status == "posted":
         canonical_platform = "LinkedIn"
-        if facebook_draft:
-            canonical_platform = "Facebook"
-        elif x_draft:
-            canonical_platform = "X"
-        elif instagram_draft:
-            canonical_platform = "Instagram"
-        elif pinterest_draft:
-            canonical_platform = "Pinterest"
-        elif threads_draft:
-            canonical_platform = "Threads"
-        elif tiktok_draft:
-            canonical_platform = "TikTok"
-        elif youtube_draft:
-            canonical_platform = "YouTube"
-            
         note_val = news_item.notes or "posted"
         if note_val.startswith("http://") or note_val.startswith("https://"):
             link_post = f"{canonical_platform}: {note_val}"
@@ -399,7 +399,7 @@ def save_news_to_business_excel(items: List[NewsItem], config, limit: Optional[i
         wb = openpyxl.Workbook()
         ws = wb.active
         ws.title = "Payment"
-        headers = ["#", "Trillion $ news Title", "Image link", "Linkedin", "Facebook", "X (Twitter)", "Instagram", "Pinterest", "Threads", "TikTok", "YouTube", "Link Post"]
+        headers = ["#", "Trillion $ news Title", "Image link", "Linkedin", "Link Post"]
         ws.append(headers)
         wb.save(filepath)
         print(f"[SUCCESS] Initialized new Business Workbook at {filepath}")
@@ -440,7 +440,7 @@ def save_news_to_business_excel(items: List[NewsItem], config, limit: Optional[i
             
             if sheet_name not in wb.sheetnames:
                 ws = wb.create_sheet(title=sheet_name)
-                headers = ["#", "Trillion $ news Title", "Image link", "Linkedin", "Facebook", "X (Twitter)", "Instagram", "Pinterest", "Threads", "TikTok", "YouTube", "Link Post"]
+                headers = ["#", "Trillion $ news Title", "Image link", "Linkedin", "Link Post"]
                 ws.append(headers)
             else:
                 ws = wb[sheet_name]
@@ -550,7 +550,7 @@ def save_news_to_business_excel(items: List[NewsItem], config, limit: Optional[i
             col_id = id_col
             col_title = col_map.get("trillion $ news title", 2)
             
-            new_row_idx = ws.max_row + 1
+            new_row_idx = _find_first_empty_data_row(ws, title_col)
             ws.cell(row=new_row_idx, column=col_id).value = item.id
             ws.cell(row=new_row_idx, column=col_title).value = item.title
             ws.cell(row=new_row_idx, column=col_img).value = item.image_file
@@ -574,6 +574,12 @@ def save_news_to_business_excel(items: List[NewsItem], config, limit: Optional[i
                     if ws_check.max_row <= 1:
                         wb.remove(ws_check)
                         
+        for sheet_name in wb.sheetnames:
+            ws = wb[sheet_name]
+            title_col = _resolve_title_column(ws)
+            if title_col is not None:
+                _compact_sheet_empty_rows(ws, title_col)
+
         wb.save(filepath)
         if saved_items:
             print(f"[SUCCESS] Appended {len(saved_items)} new articles to Business Workbook sheets.")
@@ -615,14 +621,7 @@ def generate_drafts_for_business_excel(config, limit: Optional[int] = None, plat
     
     wb = openpyxl.load_workbook(filepath)
     try:
-        if platform_option and platform_option.lower() != "all":
-            p_clean = platform_option.lower().strip()
-            if p_clean in ["x", "twitter", "x (twitter)"]:
-                target_platforms = ["x"]
-            else:
-                target_platforms = [p_clean]
-        else:
-            target_platforms = ["linkedin", "facebook", "x", "instagram", "pinterest", "threads", "tiktok", "youtube"]
+        target_platforms = [normalize_project_platform(platform_option, strict=True)]
             
         rows_processed = 0
         
@@ -652,7 +651,7 @@ def generate_drafts_for_business_excel(config, limit: Optional[int] = None, plat
                 continue
                 
             platform_cols = {}
-            for plat_norm, attr in REQUIRED_MAPPING.items():
+            for plat_norm, attr in ALL_DRAFT_MAPPING.items():
                 if plat_norm == "#" or plat_norm == "trillion $ news title" or plat_norm == "image link":
                     continue
                 simp_name = plat_norm
@@ -773,8 +772,125 @@ def generate_drafts_for_business_excel(config, limit: Optional[int] = None, plat
         wb.close()
 
 
+def _sheet_row_is_empty(ws, row_idx: int, title_col: int) -> bool:
+    if normalize_cell_content(ws.cell(row=row_idx, column=title_col).value):
+        return False
+    for col in range(1, ws.max_column + 1):
+        if normalize_cell_content(ws.cell(row=row_idx, column=col).value):
+            return False
+    return True
+
+
+def _resolve_title_column(ws) -> Optional[int]:
+    header_row = []
+    for row in ws.iter_rows(max_row=1, values_only=True):
+        header_row = row
+        break
+    if not header_row:
+        return None
+    for idx, val in enumerate(header_row):
+        if normalize_header(val) == "trillion $ news title":
+            return idx + 1
+    return None
+
+
+def _find_first_empty_data_row(ws, title_col: int) -> int:
+    for row_idx in range(2, ws.max_row + 2):
+        if _sheet_row_is_empty(ws, row_idx, title_col):
+            return row_idx
+    return ws.max_row + 1
+
+
+def _compact_sheet_empty_rows(ws, title_col: int) -> int:
+    removed = 0
+    row_idx = 2
+    while row_idx <= ws.max_row:
+        if _sheet_row_is_empty(ws, row_idx, title_col):
+            ws.delete_rows(row_idx, 1)
+            removed += 1
+        else:
+            row_idx += 1
+    return removed
+
+
+def filter_dashboard_workbook_rows(
+    rows: List[BusinessWorkbookRow],
+) -> List[BusinessWorkbookRow]:
+    """Hide workbook rows that have no LinkedIn draft or posting status."""
+    from src.posting_core import is_operator_stray_workbook_row
+
+    return [row for row in rows if not is_operator_stray_workbook_row(row)]
+
+
+def _worksheet_row_has_legacy_platform_residue(
+    ws,
+    row_idx: int,
+    col_map: Dict[str, int],
+) -> bool:
+    from src.posting_core import filter_link_post_for_project_scope
+
+    link_post_col = col_map.get("link post")
+    if link_post_col:
+        raw_link_post = normalize_cell_content(ws.cell(row=row_idx, column=link_post_col).value)
+        if raw_link_post:
+            if filter_link_post_for_project_scope(raw_link_post) is None:
+                return True
+
+    for plat_norm in OPTIONAL_DRAFT_MAPPING:
+        col_idx = col_map.get(plat_norm)
+        if col_idx and normalize_cell_content(ws.cell(row=row_idx, column=col_idx).value):
+            return True
+
+    return False
+
+
+def _worksheet_row_has_linkedin_content(
+    ws,
+    row_idx: int,
+    col_map: Dict[str, int],
+    workbook_path: str,
+    post_dir: Optional[str],
+) -> bool:
+    linkedin_col = col_map.get("linkedin")
+    if linkedin_col:
+        cell_str = normalize_cell_content(ws.cell(row=row_idx, column=linkedin_col).value)
+        if cell_str:
+            return True
+
+    link_post_col = col_map.get("link post")
+    if link_post_col:
+        raw_link_post = normalize_cell_content(ws.cell(row=row_idx, column=link_post_col).value)
+        if raw_link_post:
+            from src.posting_core import filter_link_post_for_project_scope
+
+            if filter_link_post_for_project_scope(raw_link_post):
+                return True
+
+    return False
+
+
+def _operator_stray_row_from_worksheet(
+    ws,
+    row_idx: int,
+    col_map: Dict[str, int],
+    workbook_path: str,
+    post_dir: Optional[str],
+) -> bool:
+    title_col = col_map.get("trillion $ news title")
+    if not title_col:
+        return False
+
+    title = normalize_cell_content(ws.cell(row=row_idx, column=title_col).value)
+    if not title:
+        return False
+
+    return not _worksheet_row_has_linkedin_content(
+        ws, row_idx, col_map, workbook_path, post_dir
+    )
+
+
 def repair_broken_draft_references(config) -> List[str]:
-    """Clear platform draft cells that point to markdown files missing on disk."""
+    """Repair workbook rows: clear broken draft refs, drop legacy orphans, compact blanks."""
     filepath = config.excel_file
     if not os.path.exists(filepath):
         raise FileNotFoundError(f"Workbook file '{filepath}' does not exist.")
@@ -787,9 +903,12 @@ def repair_broken_draft_references(config) -> List[str]:
             f"Workbook '{filepath}' is currently locked/open in another application."
         )
 
+    from src.posting_core import filter_link_post_for_project_scope
+
     post_dir = getattr(config, "post_dir", None)
     wb = openpyxl.load_workbook(filepath)
     actions: List[str] = []
+    dirty = False
 
     try:
         for sheet_name in wb.sheetnames:
@@ -807,12 +926,35 @@ def repair_broken_draft_references(config) -> List[str]:
                 if norm:
                     col_map[norm] = idx + 1
 
+            title_col = col_map.get("trillion $ news title")
+            if title_col is None:
+                continue
+
             platform_cols = {}
-            for plat_norm in REQUIRED_MAPPING:
+            for plat_norm in ALL_DRAFT_MAPPING:
                 if plat_norm in ("#", "trillion $ news title", "image link"):
                     continue
                 if plat_norm in col_map:
                     platform_cols[plat_norm] = col_map[plat_norm]
+
+            link_post_col = col_map.get("link post")
+
+            stray_row_indices = sorted(
+                (
+                    row_idx
+                    for row_idx in range(2, ws.max_row + 1)
+                    if _operator_stray_row_from_worksheet(
+                        ws, row_idx, col_map, filepath, post_dir
+                    )
+                ),
+                reverse=True,
+            )
+            for row_idx in stray_row_indices:
+                ws.delete_rows(row_idx, 1)
+                dirty = True
+                actions.append(
+                    f"Removed operator stray row at Excel row {row_idx} in sheet '{sheet_name}'"
+                )
 
             for row_idx in range(2, ws.max_row + 1):
                 for plat_norm, col_idx in platform_cols.items():
@@ -823,11 +965,37 @@ def repair_broken_draft_references(config) -> List[str]:
                     if resolve_post_draft_path(cell_str, filepath, post_dir):
                         continue
                     ws.cell(row=row_idx, column=col_idx).value = None
+                    dirty = True
                     actions.append(
                         f"Cleared broken {plat_norm} draft reference on Excel row {row_idx} in sheet '{sheet_name}'"
                     )
 
-        if actions:
+                if link_post_col:
+                    raw_link_post = normalize_cell_content(
+                        ws.cell(row=row_idx, column=link_post_col).value
+                    )
+                    if raw_link_post:
+                        scoped_link_post = filter_link_post_for_project_scope(raw_link_post)
+                        if scoped_link_post != raw_link_post:
+                            ws.cell(row=row_idx, column=link_post_col).value = scoped_link_post
+                            dirty = True
+                            if scoped_link_post is None:
+                                actions.append(
+                                    f"Cleared legacy Link Post status on Excel row {row_idx} in sheet '{sheet_name}'"
+                                )
+                            else:
+                                actions.append(
+                                    f"Trimmed legacy Link Post status on Excel row {row_idx} in sheet '{sheet_name}'"
+                                )
+
+            removed_blank_rows = _compact_sheet_empty_rows(ws, title_col)
+            if removed_blank_rows:
+                dirty = True
+                actions.append(
+                    f"Compacted {removed_blank_rows} blank row(s) in sheet '{sheet_name}'"
+                )
+
+        if dirty:
             wb.save(filepath)
     finally:
         wb.close()
