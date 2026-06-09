@@ -1,0 +1,241 @@
+const { app, BrowserWindow, dialog, shell } = require('electron');
+const { spawn } = require('child_process');
+const path = require('path');
+const fs = require('fs');
+const net = require('net');
+const http = require('http');
+const log = require('electron-log');
+
+let mainWindow = null;
+let pythonProcess = null;
+let serverPort = null;
+
+const APP_TITLE = 'Trillion News Post';
+
+function isPackaged() {
+  return app.isPackaged;
+}
+
+function projectRoot() {
+  return isPackaged()
+    ? path.join(process.resourcesPath, 'app')
+    : path.join(__dirname, '..');
+}
+
+function userDataRoot() {
+  return app.getPath('userData');
+}
+
+function pythonExecutable() {
+  if (isPackaged()) {
+    if (process.platform === 'win32') {
+      return path.join(process.resourcesPath, 'python-venv', 'Scripts', 'python.exe');
+    }
+    return path.join(process.resourcesPath, 'python-venv', 'bin', 'python3');
+  }
+
+  const candidates = [
+    path.join(__dirname, '..', '.venv', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python3'),
+    path.join(__dirname, '..', '.venv', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python'),
+  ];
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  return process.platform === 'win32' ? 'python' : 'python3';
+}
+
+function playwrightBrowsersPath() {
+  if (isPackaged()) {
+    return path.join(process.resourcesPath, 'playwright-browsers');
+  }
+  return process.env.PLAYWRIGHT_BROWSERS_PATH || '';
+}
+
+function ensureOperatorEnv() {
+  const dataRoot = userDataRoot();
+  const outputDir = path.join(dataRoot, 'output');
+  fs.mkdirSync(outputDir, { recursive: true });
+
+  const envPath = path.join(dataRoot, '.env');
+  const examplePath = path.join(projectRoot(), '.env.example');
+  if (!fs.existsSync(envPath) && fs.existsSync(examplePath)) {
+    fs.copyFileSync(examplePath, envPath);
+    log.info('Seeded operator .env from .env.example at', envPath);
+  }
+
+  const env = {
+    ...process.env,
+    OUTPUT_DIR: outputDir,
+    EXCEL_FILE: path.join(outputDir, 'Trillion $ news.xlsx'),
+    IMAGE_DIR: path.join(outputDir, 'Ảnh Trillion $ news'),
+    POST_DIR: path.join(outputDir, 'posts'),
+    LOG_DIR: path.join(outputDir, 'logs'),
+  };
+
+  const browsersPath = playwrightBrowsersPath();
+  if (browsersPath) {
+    env.PLAYWRIGHT_BROWSERS_PATH = browsersPath;
+  }
+
+  return { env, envPath, outputDir };
+}
+
+function findFreePort() {
+  return new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.listen(0, '127.0.0.1', () => {
+      const address = server.address();
+      const port = typeof address === 'object' && address ? address.port : 8080;
+      server.close(() => resolve(port));
+    });
+    server.on('error', reject);
+  });
+}
+
+function waitForServer(port, timeoutMs = 90000) {
+  const started = Date.now();
+  return new Promise((resolve, reject) => {
+    const attempt = () => {
+      const req = http.get(`http://127.0.0.1:${port}/`, (res) => {
+        res.resume();
+        resolve();
+      });
+      req.on('error', () => {
+        if (Date.now() - started > timeoutMs) {
+          reject(new Error(`Web UI did not start on port ${port}`));
+          return;
+        }
+        setTimeout(attempt, 500);
+      });
+      req.setTimeout(2500, () => {
+        req.destroy();
+      });
+    };
+    attempt();
+  });
+}
+
+function stopPythonProcess() {
+  if (!pythonProcess) {
+    return;
+  }
+  try {
+    if (process.platform === 'win32') {
+      spawn('taskkill', ['/pid', String(pythonProcess.pid), '/f', '/t']);
+    } else {
+      pythonProcess.kill('SIGTERM');
+    }
+  } catch (error) {
+    log.warn('Failed to stop python process cleanly', error);
+  }
+  pythonProcess = null;
+}
+
+async function startPythonBackend(port) {
+  const python = pythonExecutable();
+  if (isPackaged() && !fs.existsSync(python)) {
+    throw new Error(`Bundled Python runtime not found at ${python}`);
+  }
+
+  const { env } = ensureOperatorEnv();
+  const cwd = projectRoot();
+  const args = [path.join(cwd, 'main.py'), 'web', '--port', String(port)];
+
+  log.info('Starting backend', python, args.join(' '));
+
+  pythonProcess = spawn(python, args, {
+    cwd,
+    env,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  pythonProcess.stdout.on('data', (chunk) => log.info('[python]', chunk.toString().trimEnd()));
+  pythonProcess.stderr.on('data', (chunk) => log.warn('[python]', chunk.toString().trimEnd()));
+  pythonProcess.on('exit', (code, signal) => {
+    log.info('Python backend exited', { code, signal });
+    pythonProcess = null;
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      dialog.showErrorBox(
+        APP_TITLE,
+        `The local Web UI backend stopped unexpectedly (code ${code ?? 'unknown'}).`
+      );
+    }
+  });
+}
+
+function createMainWindow(port) {
+  mainWindow = new BrowserWindow({
+    width: 1440,
+    height: 920,
+    minWidth: 1100,
+    minHeight: 700,
+    title: APP_TITLE,
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+
+  mainWindow.once('ready-to-show', () => mainWindow.show());
+  mainWindow.loadURL(`http://127.0.0.1:${port}/`);
+
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    shell.openExternal(url);
+    return { action: 'deny' };
+  });
+
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+  });
+}
+
+async function bootstrap() {
+  try {
+    serverPort = await findFreePort();
+    await startPythonBackend(serverPort);
+    await waitForServer(serverPort);
+    createMainWindow(serverPort);
+  } catch (error) {
+    log.error('Failed to bootstrap desktop app', error);
+    dialog.showErrorBox(
+      APP_TITLE,
+      `${error.message}\n\nCheck electron-log for details.`
+    );
+    app.quit();
+  }
+}
+
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+  });
+
+  app.whenReady().then(bootstrap);
+
+  app.on('before-quit', () => {
+    stopPythonProcess();
+  });
+
+  app.on('window-all-closed', () => {
+    if (process.platform !== 'darwin') {
+      app.quit();
+    }
+  });
+
+  app.on('activate', async () => {
+    if (BrowserWindow.getAllWindows().length === 0 && serverPort) {
+      createMainWindow(serverPort);
+    }
+  });
+}

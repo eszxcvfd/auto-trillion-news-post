@@ -1,0 +1,88 @@
+{
+  "name": "trillion-news-post-desktop",
+  "version": "1.0.0",
+  "description": "Desktop operator surface for Trillion News Auto Post System",
+  "main": "main.js",
+  "author": "Trillion News",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "stage-app": "node scripts/stage-app.mjs",
+    "prepare-runtime": "node scripts/prepare-runtime.mjs",
+    "predist": "npm run stage-app",
+    "dist": "electron-builder --publish never",
+    "dist:publish": "electron-builder --publish always"
+  },
+  "dependencies": {
+    "electron-log": "^5.4.0"
+  },
+  "devDependencies": {
+    "electron": "^35.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.trillionnews.operator",
+    "productName": "Trillion News Post",
+    "copyright": "Copyright © 2026 Trillion News",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "staging/app",
+        "to": "app",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "runtime/venv",
+        "to": "python-venv",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "runtime/playwright-browsers",
+        "to": "playwright-browsers",
+        "filter": ["**/*"]
+      }
+    ],
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Office",
+      "maintainer": "eszxcvfd@gmail.com",
+      "artifactName": "Trillion-News-Post-${version}-linux-${arch}.${ext}"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        },
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ],
+      "artifactName": "Trillion-News-Post-${version}-win-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "Trillion News Post"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "eszxcvfd",
+      "repo": "auto-trillion-news-post"
+    }
+  }
+}

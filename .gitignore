@@ -27,6 +27,12 @@ output/
 target/
 dist/
 
+# Electron desktop packaging.
+electron/node_modules/
+electron/dist/
+electron/staging/
+electron/runtime/
+
 # Downloaded Harness CLI binary for installed project instances.
 scripts/bin/harness-cli
 scripts/bin/harness-cli.exe

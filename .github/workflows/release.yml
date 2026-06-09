@@ -1,0 +1,129 @@
+name: Desktop Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    name: Verify Python suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Run tests
+        run: python -m pytest tests/ -q
+
+  build:
+    name: Build ${{ matrix.os }}
+    needs: verify
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            label: linux
+          - os: windows-latest
+            label: win
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: electron/package-lock.json
+
+      - name: Prepare bundled Python runtime
+        shell: bash
+        run: node electron/scripts/prepare-runtime.mjs
+
+      - name: Stage application files
+        run: node electron/scripts/stage-app.mjs
+
+      - name: Install Electron dependencies
+        working-directory: electron
+        run: npm ci
+
+      - name: Build desktop artifacts
+        working-directory: electron
+        run: npm run dist
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.label }}
+          path: |
+            electron/dist/*.AppImage
+            electron/dist/*.deb
+            electron/dist/*.exe
+            electron/dist/*.nsis.7z
+          if-no-files-found: warn
+
+  publish:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download Linux artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: desktop-linux
+          path: artifacts/linux
+
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: desktop-win
+          path: artifacts/win
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            artifacts/linux/*
+            artifacts/win/*
+          body: |
+            ## Trillion News Post Desktop v${{ github.ref_name }}
+
+            Electron operator shell bundling the local Flask Web UI and Python backend.
+
+            ### Included artifacts
+            - **Linux:** AppImage + deb (x64)
+            - **Windows:** NSIS installer + portable exe (x64)
+
+            ### First launch
+            1. Install and open the desktop app.
+            2. Operator data is stored under the app user-data directory (`output/`, `.env`).
+            3. Edit `.env` in user-data folder and set `GEMINI_API_KEY` before harvest/generate.
+            4. Onboard LinkedIn session from **Session Status** in the Web UI.
+
+            ### Requirements
+            - Network access for Gemini API and LinkedIn
+            - Chromium is bundled via Playwright for assisted posting flows
+
+            ### Verify build
+            Python test suite passed on tag before packaging (`pytest tests/`).
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
