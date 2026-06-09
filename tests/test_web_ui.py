@@ -428,5 +428,144 @@ class TestWebUI(unittest.TestCase):
         data = json.loads(response.data)
         self.assertTrue(data["enabled"])
 
+    def test_api_keywords_get_and_put(self):
+        keywords_path = os.path.join(self.test_dir, "keywords.txt")
+        os.environ["KEYWORDS_FILE"] = keywords_path
+        with open(keywords_path, "w", encoding="utf-8") as f:
+            f.write("Seed keyword\n")
+
+        get_response = self.client.get('/api/keywords')
+        self.assertEqual(get_response.status_code, 200)
+        get_data = json.loads(get_response.data)
+        self.assertEqual(get_data["active_count"], 1)
+        self.assertEqual(get_data["keywords"][0]["text"], "Seed keyword")
+
+        put_response = self.client.put('/api/keywords', json={
+            "keywords": [
+                {"text": "Updated keyword", "enabled": True},
+                {"text": "Paused keyword", "enabled": False},
+            ]
+        })
+        self.assertEqual(put_response.status_code, 200)
+        put_data = json.loads(put_response.data)
+        self.assertEqual(put_data["active_count"], 1)
+
+        active = __import__("src.keywords_store", fromlist=["load_active_keywords"]).load_active_keywords(keywords_path)
+        self.assertEqual(active, ["Updated keyword"])
+
+    def test_api_keywords_put_rejects_duplicates(self):
+        keywords_path = os.path.join(self.test_dir, "keywords.txt")
+        os.environ["KEYWORDS_FILE"] = keywords_path
+
+        response = self.client.put('/api/keywords', json={
+            "keywords": [
+                {"text": "Same keyword", "enabled": True},
+                {"text": "same keyword", "enabled": True},
+            ]
+        })
+        self.assertEqual(response.status_code, 400)
+        data = json.loads(response.data)
+        self.assertIn("Duplicate", data["error"])
+
+    @patch('src.web_ui.regenerate_linkedin_draft_for_row')
+    def test_api_workbook_regenerate_draft(self, mock_regenerate):
+        filepath = os.environ["EXCEL_FILE"]
+        with open(filepath, "w") as f:
+            f.write("")
+
+        mock_regenerate.return_value = {
+            "sheet_name": "Payment",
+            "row_idx": 2,
+            "row_id": 1,
+            "title": "Test Article",
+            "platform": "linkedin",
+        }
+
+        response = self.client.post('/api/workbook/rows/regenerate-draft', json={
+            "sheet_name": "Payment",
+            "row_idx": 2,
+        })
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertIn("regenerated", data["message"].lower())
+        mock_regenerate.assert_called_once()
+
+    @patch('src.web_ui.delete_workbook_row')
+    def test_api_workbook_delete_row(self, mock_delete):
+        filepath = os.environ["EXCEL_FILE"]
+        with open(filepath, "w") as f:
+            f.write("")
+
+        mock_delete.return_value = {
+            "sheet_name": "Payment",
+            "row_idx": 2,
+            "row_id": 1,
+            "title": "Test Article",
+            "compacted_blank_rows": 0,
+        }
+
+        response = self.client.delete(
+            '/api/workbook/rows',
+            json={"sheet_name": "Payment", "row_idx": 2},
+        )
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertIn("deleted", data["message"].lower())
+        mock_delete.assert_called_once()
+
+    def test_api_workbook_delete_row_requires_fields(self):
+        filepath = os.environ["EXCEL_FILE"]
+        with open(filepath, "w") as f:
+            f.write("")
+
+        response = self.client.delete('/api/workbook/rows', json={})
+        self.assertEqual(response.status_code, 400)
+
+    def test_api_posts_list_get_and_put(self):
+        post_dir = os.path.join(self.test_dir, "posts")
+        os.makedirs(post_dir, exist_ok=True)
+        os.environ["POST_DIR"] = post_dir
+
+        sample = """# Post 001 — Linkedin
+
+## Generated Post
+
+Original body
+"""
+        rel_name = "2026-06-09_001_payment_linkedin.md"
+        with open(os.path.join(post_dir, rel_name), "w", encoding="utf-8") as f:
+            f.write(sample)
+
+        list_response = self.client.get('/api/posts')
+        self.assertEqual(list_response.status_code, 200)
+        list_data = json.loads(list_response.data)
+        self.assertEqual(list_data["count"], 1)
+        self.assertEqual(list_data["posts"][0]["relative_path"], rel_name)
+
+        get_response = self.client.get(f'/api/posts/{rel_name}')
+        self.assertEqual(get_response.status_code, 200)
+        get_data = json.loads(get_response.data)
+        self.assertEqual(get_data["generated_post"], "Original body")
+
+        put_response = self.client.put(
+            f'/api/posts/{rel_name}',
+            json={"generated_post": "Edited from API"},
+        )
+        self.assertEqual(put_response.status_code, 200)
+        put_data = json.loads(put_response.data)
+        self.assertEqual(put_data["post"]["generated_post"], "Edited from API")
+
+    def test_api_posts_put_requires_generated_post(self):
+        post_dir = os.path.join(self.test_dir, "posts")
+        os.makedirs(post_dir, exist_ok=True)
+        os.environ["POST_DIR"] = post_dir
+        rel_name = "sample.md"
+        with open(os.path.join(post_dir, rel_name), "w", encoding="utf-8") as f:
+            f.write("## Generated Post\n\nBody\n")
+
+        response = self.client.put(f'/api/posts/{rel_name}', json={})
+        self.assertEqual(response.status_code, 400)
+
+
 if __name__ == "__main__":
     unittest.main()

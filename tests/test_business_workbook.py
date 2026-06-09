@@ -2,6 +2,7 @@ import os
 import shutil
 import tempfile
 import unittest
+from unittest.mock import patch
 import openpyxl
 
 from src.models import NewsItem, BusinessWorkbookRow
@@ -14,7 +15,9 @@ from src.business_workbook import (
     map_news_item_to_business_row,
     get_sheet_name_for_keyword,
     save_news_to_business_excel,
-    generate_drafts_for_business_excel
+    generate_drafts_for_business_excel,
+    delete_workbook_row,
+    regenerate_linkedin_draft_for_row,
 )
 
 class TestBusinessWorkbook(unittest.TestCase):
@@ -560,6 +563,71 @@ class TestBusinessWorkbook(unittest.TestCase):
         self.assertTrue(os.path.exists(resolve_post_draft_path(linkedin_cell_val, config.excel_file)))
         
         wb.close()
+
+    def test_delete_workbook_row_compacts_sheet(self):
+        class MockConfig:
+            def __init__(self, excel_file):
+                self.excel_file = excel_file
+                self.backup_enabled = False
+
+        config = MockConfig(excel_file=os.path.join(self.test_dir, "test_delete_row.xlsx"))
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Payment"
+        headers = ["#", "Trillion $ news Title", "Image link", "Linkedin", "Link Post"]
+        ws.append(headers)
+        ws.append([1, "Keep me", None, "draft", None])
+        ws.append([2, "Delete me", None, "draft", None])
+        ws.append([None, None, None, None, None])
+        wb.save(config.excel_file)
+
+        result = delete_workbook_row(config, sheet_name="Payment", row_idx=3)
+        self.assertEqual(result["row_id"], 2)
+        self.assertEqual(result["title"], "Delete me")
+
+        wb = openpyxl.load_workbook(config.excel_file)
+        ws = wb["Payment"]
+        self.assertEqual(ws.max_row, 2)
+        self.assertEqual(ws.cell(row=2, column=2).value, "Keep me")
+        wb.close()
+
+    @patch("src.ai_writer.generate_ai_post")
+    @patch("src.ai_writer.validate_generated_post")
+    def test_regenerate_linkedin_draft_for_row(self, mock_validate, mock_generate):
+        class MockConfig:
+            def __init__(self, excel_file, image_dir):
+                self.excel_file = excel_file
+                self.image_dir = image_dir
+                self.backup_enabled = False
+                self.default_platform = "linkedin"
+
+        mock_generate.side_effect = lambda title, source, snippet, url, platform, config: (
+            f"Regenerated draft for {platform} - {title}"
+        )
+        mock_validate.return_value = True
+
+        config = MockConfig(
+            excel_file=os.path.join(self.test_dir, "test_regenerate_row.xlsx"),
+            image_dir=self.test_dir,
+        )
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Payment"
+        headers = ["#", "Trillion $ news Title", "Image link", "Linkedin", "Facebook", "Link Post"]
+        ws.append(headers)
+        ws.append([1, "Merchant Payments Title", None, "Old draft content", None, None])
+        wb.save(config.excel_file)
+
+        result = regenerate_linkedin_draft_for_row(config, sheet_name="Payment", row_idx=2)
+        self.assertEqual(result["row_id"], 1)
+        self.assertEqual(result["platform"], "linkedin")
+
+        wb = openpyxl.load_workbook(config.excel_file)
+        linkedin_cell_val = wb["Payment"].cell(row=2, column=4).value
+        self.assertTrue(linkedin_cell_val)
+        self.assertNotEqual(linkedin_cell_val, "Old draft content")
+        wb.close()
+
 
 if __name__ == "__main__":
     unittest.main()
