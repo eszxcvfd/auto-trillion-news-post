@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.snow.css" rel="stylesheet">
   <script>
     (function () {
       const stored = localStorage.getItem('tn-theme');
@@ -353,6 +354,99 @@
     .btn-sm {
       padding: 5px 10px;
       font-size: 0.75rem;
+    }
+
+    .row-actions {
+      display: flex;
+      gap: 6px;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+    }
+
+    .post-drafts-layout {
+      display: grid;
+      grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+      gap: 20px;
+      align-items: start;
+    }
+
+    .post-drafts-list {
+      max-height: calc(100vh - 200px);
+      overflow-y: auto;
+    }
+
+    .post-draft-item {
+      padding: 10px 12px;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      margin-bottom: 8px;
+      cursor: pointer;
+      background: var(--bg-card);
+      transition: border-color 0.15s ease, background 0.15s ease;
+    }
+
+    .post-draft-item:hover,
+    .post-draft-item.active {
+      border-color: var(--accent);
+      background: var(--bg-subtle);
+    }
+
+    .post-draft-item-title {
+      font-weight: 600;
+      font-size: 0.85rem;
+      margin-bottom: 4px;
+      line-height: 1.35;
+    }
+
+    .post-draft-item-meta {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
+
+    .post-editor-toolbar-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+      align-items: center;
+    }
+
+    .post-editor-meta {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      line-height: 1.55;
+      margin-bottom: 12px;
+      padding: 12px;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      background: var(--bg-subtle);
+    }
+
+    #post-draft-editor {
+      min-height: 360px;
+      background: var(--bg-card);
+      color: var(--text-primary);
+      border-radius: 0 0 var(--radius-md) var(--radius-md);
+    }
+
+    .ql-toolbar.ql-snow,
+    .ql-container.ql-snow {
+      border-color: var(--border-color);
+      background: var(--bg-card);
+      color: var(--text-primary);
+    }
+
+    [data-theme="dark"] .ql-snow .ql-stroke {
+      stroke: var(--text-muted);
+    }
+
+    [data-theme="dark"] .ql-snow .ql-fill {
+      fill: var(--text-muted);
+    }
+
+    [data-theme="dark"] .ql-snow .ql-picker {
+      color: var(--text-muted);
     }
 
     .theme-toggle .theme-icon-dark { display: none; }
@@ -1009,6 +1103,14 @@
         <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9"></rect><rect x="14" y="3" width="7" height="5"></rect><rect x="14" y="12" width="7" height="9"></rect><rect x="3" y="16" width="7" height="5"></rect></svg>
         Dashboard
       </li>
+      <li class="menu-item" onclick="switchView('keywords')">
+        <svg viewBox="0 0 24 24"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg>
+        Keywords
+      </li>
+      <li class="menu-item" onclick="switchView('post-drafts')">
+        <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+        Post Drafts
+      </li>
       <li class="menu-item" onclick="switchView('draft-run')">
         <svg viewBox="0 0 24 24"><path d="M12 2v6"></path><path d="M12 16v6"></path><path d="M4.93 4.93l4.24 4.24"></path><path d="M14.83 14.83l4.24 4.24"></path><path d="M2 12h6"></path><path d="M16 12h6"></path><path d="M4.93 19.07l4.24-4.24"></path><path d="M14.83 9.17l4.24-4.24"></path></svg>
         Draft Run
@@ -1150,7 +1252,7 @@
                   <th>Title</th>
                   <th>Image Path / Drive URL</th>
                   <th>Link Post Status</th>
-                  <th style="text-align: right; width: 120px;">Actions</th>
+                  <th style="text-align: right; width: 280px;">Actions</th>
                 </tr>
               </thead>
               <tbody id="workbook-table-body">
@@ -1158,6 +1260,96 @@
                 <tr><td colspan="6" style="text-align:center; padding: 40px; color:var(--text-muted);">Loading sheets...</td></tr>
               </tbody>
             </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Keywords View -->
+      <div id="view-keywords" class="view">
+        <div style="display:grid; grid-template-columns: 1.4fr 1fr; gap: 24px;">
+          <div class="card">
+            <div class="card-title" style="flex-wrap:wrap; gap:8px;">
+              <span>Harvest Keywords</span>
+              <span id="keywords-path-label" style="margin-left:auto; font-size:0.75rem; color:var(--text-muted); font-weight:400;"></span>
+            </div>
+            <p style="color:var(--text-muted); line-height:1.6; margin-bottom:20px;">
+              Manage search phrases used by Draft Run, CLI <code>search</code>/<code>run</code>, and scheduled harvest jobs.
+              Disabled keywords stay in the file but are skipped during harvest.
+            </p>
+
+            <div class="table-container" style="margin-bottom:20px;">
+              <table id="keywords-table">
+                <thead>
+                  <tr>
+                    <th>Keyword</th>
+                    <th style="width:100px;">Active</th>
+                    <th style="text-align:right; width:90px;">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="keywords-table-body">
+                  <tr><td colspan="3" style="text-align:center; padding:32px; color:var(--text-muted);">Loading keywords...</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;">
+              <div class="form-group" style="flex:1; min-width:220px; margin-bottom:0;">
+                <label for="keyword-add-input">Add keyword</label>
+                <input type="text" id="keyword-add-input" class="form-control" placeholder="e.g. Payment services trillion $">
+              </div>
+              <button type="button" class="btn btn-primary" onclick="addKeywordFromInput()">Add</button>
+              <button type="button" class="btn" onclick="saveKeywords()">Save Changes</button>
+            </div>
+            <div id="keywords-status" style="margin-top:12px; font-size:0.8rem; color:var(--text-muted);"></div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">Usage</div>
+            <ul style="margin-left:20px; color:var(--text-muted); line-height:1.7;">
+              <li><strong id="keywords-active-count">0</strong> active keywords will be used on the next harvest.</li>
+              <li>Draft Run reads this list automatically — no manual file editing required.</li>
+              <li>Comments and legacy <code>#</code> lines in the file are preserved on load but not shown here.</li>
+              <li>Duplicate keywords (case-insensitive) are rejected on save.</li>
+            </ul>
+            <button type="button" class="btn btn-secondary" style="margin-top:16px;" onclick="switchView('draft-run')">Open Draft Run</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Post Drafts View -->
+      <div id="view-post-drafts" class="view">
+        <div class="post-drafts-layout">
+          <div class="card">
+            <div class="card-title">Post Draft Files</div>
+            <div class="form-group" style="margin-bottom:12px;">
+              <label for="post-drafts-search">Search</label>
+              <input type="search" id="post-drafts-search" class="form-control" placeholder="Filter by title or filename…" oninput="onPostDraftSearchChange()">
+            </div>
+            <div id="post-drafts-path-label" style="font-size:0.75rem; color:var(--text-muted); margin-bottom:12px;"></div>
+            <div class="post-drafts-list" id="post-drafts-list">
+              <div style="color:var(--text-muted); padding:16px 0;">Loading post drafts…</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title" style="flex-wrap:wrap; gap:8px;">
+              <span id="post-editor-title">Select a draft to edit</span>
+              <span id="post-editor-modified" style="margin-left:auto; font-size:0.75rem; color:var(--text-muted); font-weight:400;"></span>
+            </div>
+
+            <div id="post-editor-empty" style="color:var(--text-muted); line-height:1.6; padding:24px 0;">
+              Choose a LinkedIn post draft from <code>output/posts/</code> to open the Word-like editor.
+            </div>
+
+            <div id="post-editor-panel" style="display:none;">
+              <div class="post-editor-meta" id="post-editor-meta"></div>
+              <div class="post-editor-toolbar-actions">
+                <button type="button" class="btn btn-primary" onclick="savePostDraft()">Save Draft</button>
+                <button type="button" class="btn" onclick="discardPostDraftChanges()">Discard Changes</button>
+                <span id="post-editor-status" style="font-size:0.75rem; color:var(--text-muted);"></span>
+              </div>
+              <div id="post-draft-editor"></div>
+            </div>
           </div>
         </div>
       </div>
@@ -1174,8 +1366,12 @@
 
             <form id="draft-run-form" onsubmit="submitDraftRun(event)">
               <div class="form-group">
-                <label for="draft-keywords-path">Keywords File</label>
-                <input type="text" id="draft-keywords-path" class="form-control" value="keywords.txt" placeholder="e.g. keywords.txt">
+                <label>Harvest Keywords</label>
+                <input type="text" id="draft-keywords-path" class="form-control" value="keywords.txt" readonly title="Managed in the Keywords view">
+                <small style="color:var(--text-muted); font-size:0.75rem; margin-top:4px; display:block;">
+                  <span id="draft-keywords-summary">Loading keyword list…</span>
+                  <button type="button" class="btn btn-secondary btn-sm" style="margin-top:8px;" onclick="switchView('keywords')">Manage Keywords</button>
+                </small>
               </div>
 
                 <div class="form-group">
@@ -1554,10 +1750,25 @@
   <!-- Toasts Container -->
   <div class="toast-container" id="toast-container"></div>
 
+  <script src="https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/turndown@7.2.0/dist/turndown.js"></script>
+
   <!-- JavaScript Interaction -->
   <script>
     let appConfig = {};
     let sheetsData = [];
+    let postDraftsData = [];
+    let activePostDraftPath = null;
+    let postDraftDirty = false;
+    let postDraftSavedMarkdown = '';
+    let postDraftQuill = null;
+    let postDraftSearchTimer = null;
+    let postDraftLoading = false;
+    let postDraftRequestSeq = 0;
+    let keywordsData = [];
+    let keywordsSourcePath = 'keywords.txt';
+    let keywordsDirty = false;
     let currentSheetName = "";
     let workbookLoadSeq = 0;
     let activeJobTimer = null;
@@ -1611,6 +1822,13 @@
 
     // View Routing
     function switchView(viewName) {
+      if (postDraftDirty && viewName !== 'post-drafts') {
+        if (!confirm('You have unsaved post draft changes. Leave without saving?')) {
+          return;
+        }
+        postDraftDirty = false;
+      }
+
       document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
       document.querySelectorAll('.menu-item').forEach(m => m.classList.remove('active'));
       
@@ -1633,7 +1851,12 @@
           renderDashboardSheets();
         }
         loadWorkbookData();
+      } else if (viewName === 'keywords') {
+        loadKeywords();
+      } else if (viewName === 'post-drafts') {
+        loadPostDraftsList();
       } else if (viewName === 'draft-run') {
+        loadKeywordsSummary();
         loadLatestDraftRun();
       } else if (viewName === 'sessions') {
         loadSessionsStatus();
@@ -1706,6 +1929,456 @@
         .catch(err => {
           showToast('Failed to load system configuration', 'error');
         });
+    }
+
+    function loadKeywordsSummary() {
+      fetch('/api/keywords')
+        .then(res => res.json().then(data => ({ ok: res.ok, data })))
+        .then(({ ok, data }) => {
+          if (!ok || data.error) throw new Error(data.error || 'Failed to load keywords');
+          keywordsSourcePath = data.path || 'keywords.txt';
+          const pathInput = document.getElementById('draft-keywords-path');
+          if (pathInput) pathInput.value = keywordsSourcePath;
+          const summary = document.getElementById('draft-keywords-summary');
+          if (summary) {
+            const active = data.active_count ?? 0;
+            const total = (data.keywords || []).length;
+            summary.textContent = `${active} active / ${total} total keywords from ${keywordsSourcePath}`;
+          }
+        })
+        .catch(err => {
+          const summary = document.getElementById('draft-keywords-summary');
+          if (summary) summary.textContent = err.message;
+        });
+    }
+
+    function loadKeywords() {
+      const tbody = document.getElementById('keywords-table-body');
+      if (tbody) {
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; padding:32px; color:var(--text-muted);">Loading keywords...</td></tr>';
+      }
+
+      fetch('/api/keywords')
+        .then(res => res.json().then(data => ({ ok: res.ok, data })))
+        .then(({ ok, data }) => {
+          if (!ok || data.error) throw new Error(data.error || 'Failed to load keywords');
+          keywordsData = (data.keywords || []).map((item, idx) => ({
+            id: idx,
+            text: item.text,
+            enabled: item.enabled !== false,
+          }));
+          keywordsSourcePath = data.path || 'keywords.txt';
+          keywordsDirty = false;
+          renderKeywordsTable();
+          updateKeywordsMeta(data.active_count);
+        })
+        .catch(err => {
+          if (tbody) {
+            tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; padding:32px; color:var(--status-error);">${escapeHtml(err.message)}</td></tr>`;
+          }
+          showToast(err.message, 'error');
+        });
+    }
+
+    function updateKeywordsMeta(activeCount) {
+      const pathLabel = document.getElementById('keywords-path-label');
+      if (pathLabel) pathLabel.textContent = keywordsSourcePath;
+      const countEl = document.getElementById('keywords-active-count');
+      if (countEl) {
+        const active = activeCount ?? keywordsData.filter(k => k.enabled).length;
+        countEl.textContent = String(active);
+      }
+      const statusEl = document.getElementById('keywords-status');
+      if (statusEl) {
+        statusEl.textContent = keywordsDirty
+          ? 'Unsaved changes — click Save Changes before running harvest.'
+          : `${keywordsData.length} keyword(s) loaded.`;
+      }
+    }
+
+    function renderKeywordsTable() {
+      const tbody = document.getElementById('keywords-table-body');
+      if (!tbody) return;
+      tbody.innerHTML = '';
+
+      if (!keywordsData.length) {
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; padding:32px; color:var(--text-muted);">No keywords yet. Add one below.</td></tr>';
+        updateKeywordsMeta();
+        return;
+      }
+
+      keywordsData.forEach((item, idx) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><input type="text" class="form-control" value="${escapeHtml(item.text)}" oninput="updateKeywordText(${idx}, this.value)"></td>
+          <td>
+            <label style="display:flex; align-items:center; gap:8px; font-size:0.85rem;">
+              <input type="checkbox" ${item.enabled ? 'checked' : ''} onchange="toggleKeywordEnabled(${idx}, this.checked)">
+              ${item.enabled ? 'On' : 'Off'}
+            </label>
+          </td>
+          <td style="text-align:right;">
+            <button type="button" class="btn btn-danger btn-sm" onclick="removeKeyword(${idx})">Remove</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+      updateKeywordsMeta();
+    }
+
+    function markKeywordsDirty() {
+      keywordsDirty = true;
+      updateKeywordsMeta();
+    }
+
+    function updateKeywordText(index, value) {
+      if (!keywordsData[index]) return;
+      keywordsData[index].text = value;
+      markKeywordsDirty();
+    }
+
+    function toggleKeywordEnabled(index, enabled) {
+      if (!keywordsData[index]) return;
+      keywordsData[index].enabled = enabled;
+      renderKeywordsTable();
+      markKeywordsDirty();
+    }
+
+    function removeKeyword(index) {
+      const item = keywordsData[index];
+      if (!item) return;
+      if (!confirm(`Remove keyword "${item.text}"?`)) return;
+      keywordsData.splice(index, 1);
+      renderKeywordsTable();
+      markKeywordsDirty();
+    }
+
+    function addKeywordFromInput() {
+      const input = document.getElementById('keyword-add-input');
+      if (!input) return;
+      const text = input.value.trim();
+      if (!text) {
+        showToast('Enter a keyword first', 'warning');
+        return;
+      }
+      const duplicate = keywordsData.some(k => k.text.toLowerCase() === text.toLowerCase());
+      if (duplicate) {
+        showToast('That keyword already exists', 'warning');
+        return;
+      }
+      keywordsData.push({ id: keywordsData.length, text, enabled: true });
+      input.value = '';
+      renderKeywordsTable();
+      markKeywordsDirty();
+    }
+
+    function saveKeywords() {
+      const payload = keywordsData.map(item => ({
+        text: (item.text || '').trim(),
+        enabled: !!item.enabled,
+      })).filter(item => item.text);
+
+      fetch('/api/keywords', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ keywords: payload }),
+      })
+        .then(res => res.json().then(data => ({ ok: res.ok, data })))
+        .then(({ ok, data }) => {
+          if (!ok || data.error) throw new Error(data.error || 'Failed to save keywords');
+          keywordsData = (data.keywords || []).map((item, idx) => ({
+            id: idx,
+            text: item.text,
+            enabled: item.enabled !== false,
+          }));
+          keywordsSourcePath = data.path || keywordsSourcePath;
+          keywordsDirty = false;
+          renderKeywordsTable();
+          updateKeywordsMeta(data.active_count);
+          loadKeywordsSummary();
+          showToast('Keywords saved');
+        })
+        .catch(err => showToast(err.message, 'error'));
+    }
+
+    function deleteWorkbookRow(sheetName, rowIdx, title) {
+      const label = title ? `"${title}"` : `row ${rowIdx}`;
+      if (!confirm(`Delete article ${label} from sheet "${sheetName}"? This cannot be undone (a workbook backup is created first).`)) {
+        return;
+      }
+
+      fetch('/api/workbook/rows', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sheet_name: sheetName, row_idx: rowIdx }),
+      })
+        .then(res => res.json().then(data => ({ ok: res.ok, data })))
+        .then(({ ok, data }) => {
+          if (!ok || data.error) throw new Error(data.error || 'Failed to delete row');
+          showToast('Article row deleted');
+          loadWorkbookData();
+        })
+        .catch(err => showToast(err.message, 'error'));
+    }
+
+    function regenerateWorkbookRowDraft(sheetName, rowIdx, title) {
+      const label = title ? `"${title}"` : `row ${rowIdx}`;
+      if (!confirm(`Regenerate the LinkedIn draft for ${label}? The existing draft cell will be replaced.`)) {
+        return;
+      }
+
+      showToast('Regenerating LinkedIn draft…');
+      fetch('/api/workbook/rows/regenerate-draft', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sheet_name: sheetName, row_idx: rowIdx }),
+      })
+        .then(res => res.json().then(data => ({ ok: res.ok, data })))
+        .then(({ ok, data }) => {
+          if (!ok || data.error) throw new Error(data.error || 'Failed to regenerate draft');
+          showToast('LinkedIn draft regenerated');
+          loadWorkbookData();
+        })
+        .catch(err => showToast(err.message, 'error'));
+    }
+
+    function ensurePostDraftQuill() {
+      if (postDraftQuill) return postDraftQuill;
+      if (typeof Quill === 'undefined') {
+        throw new Error('Rich text editor failed to load');
+      }
+      postDraftQuill = new Quill('#post-draft-editor', {
+        theme: 'snow',
+        modules: {
+          toolbar: [
+            ['bold', 'italic', 'underline', 'strike'],
+            [{ header: [2, 3, false] }],
+            [{ list: 'ordered' }, { list: 'bullet' }],
+            ['link'],
+            ['clean'],
+          ],
+        },
+      });
+      postDraftQuill.on('text-change', (delta, oldDelta, source) => {
+        if (!activePostDraftPath || postDraftLoading || source !== 'user') return;
+        const current = normalizeDraftMarkdown(editorHtmlToMarkdown(postDraftQuill.root.innerHTML));
+        postDraftDirty = current !== normalizeDraftMarkdown(postDraftSavedMarkdown);
+        updatePostEditorStatus();
+      });
+      return postDraftQuill;
+    }
+
+    function normalizeDraftMarkdown(text) {
+      return (text || '')
+        .replace(/\r\n/g, '\n')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+    }
+
+    function setPostDraftEditorContent(quill, markdown) {
+      postDraftLoading = true;
+      const html = markdownToEditorHtml(markdown);
+      quill.setContents([]);
+      quill.clipboard.dangerouslyPasteHTML(html);
+      postDraftLoading = false;
+      postDraftDirty = false;
+      updatePostEditorStatus();
+    }
+
+    function markdownToEditorHtml(text) {
+      const trimmed = (text || '').trim();
+      if (!trimmed) return '<p><br></p>';
+      if (window.marked && /(^|\n)\s{0,3}(#{1,6}\s|[-*+]\s|\d+\.\s|>\s|`{3,})/.test(trimmed)) {
+        return marked.parse(trimmed);
+      }
+      return trimmed
+        .split(/\n{2,}/)
+        .map(block => `<p>${escapeHtml(block).replace(/\n/g, '<br>')}</p>`)
+        .join('');
+    }
+
+    function editorHtmlToMarkdown(html) {
+      if (window.TurndownService) {
+        const td = new TurndownService({ headingStyle: 'atx', bulletListMarker: '-' });
+        td.addRule('plainBreak', {
+          filter: ['br'],
+          replacement: () => '\n',
+        });
+        return td.turndown(html || '').trim();
+      }
+      const div = document.createElement('div');
+      div.innerHTML = html || '';
+      return (div.innerText || '').trim();
+    }
+
+    function updatePostEditorStatus() {
+      const statusEl = document.getElementById('post-editor-status');
+      if (!statusEl) return;
+      statusEl.textContent = postDraftDirty
+        ? 'Unsaved changes'
+        : (activePostDraftPath ? 'All changes saved' : '');
+    }
+
+    function onPostDraftSearchChange() {
+      clearTimeout(postDraftSearchTimer);
+      postDraftSearchTimer = setTimeout(() => loadPostDraftsList(), 250);
+    }
+
+    function loadPostDraftsList(selectPath = activePostDraftPath) {
+      const listEl = document.getElementById('post-drafts-list');
+      const query = (document.getElementById('post-drafts-search')?.value || '').trim();
+      const url = query ? `/api/posts?q=${encodeURIComponent(query)}` : '/api/posts';
+
+      if (listEl) {
+        listEl.innerHTML = '<div style="color:var(--text-muted); padding:16px 0;">Loading post drafts…</div>';
+      }
+
+      fetch(url)
+        .then(res => res.json().then(data => ({ ok: res.ok, data })))
+        .then(({ ok, data }) => {
+          if (!ok || data.error) throw new Error(data.error || 'Failed to load post drafts');
+          postDraftsData = data.posts || [];
+          const pathLabel = document.getElementById('post-drafts-path-label');
+          if (pathLabel) pathLabel.textContent = data.post_dir || '';
+          renderPostDraftsList();
+          if (selectPath) {
+            openPostDraftEditor(selectPath, { skipListReload: true });
+          }
+        })
+        .catch(err => {
+          if (listEl) {
+            listEl.innerHTML = `<div style="color:var(--status-error); padding:16px 0;">${escapeHtml(err.message)}</div>`;
+          }
+          showToast(err.message, 'error');
+        });
+    }
+
+    function renderPostDraftsList() {
+      const listEl = document.getElementById('post-drafts-list');
+      if (!listEl) return;
+      listEl.innerHTML = '';
+
+      if (!postDraftsData.length) {
+        listEl.innerHTML = '<div style="color:var(--text-muted); padding:16px 0;">No post drafts found.</div>';
+        return;
+      }
+
+      postDraftsData.forEach(post => {
+        const item = document.createElement('div');
+        item.className = `post-draft-item${post.relative_path === activePostDraftPath ? ' active' : ''}`;
+        item.onclick = () => openPostDraftEditor(post.relative_path);
+        const link = post.workbook_link;
+        const linkMeta = link
+          ? `${link.sheet_name} · row ${link.row_idx}${link.title ? ` · ${link.title}` : ''}`
+          : 'No workbook link';
+        item.innerHTML = `
+          <div class="post-draft-item-title">${escapeHtml(post.title_hint || post.filename)}</div>
+          <div class="post-draft-item-meta">${escapeHtml(post.filename)}<br>${escapeHtml(linkMeta)}</div>
+        `;
+        listEl.appendChild(item);
+      });
+    }
+
+    function openPostDraftFromRow(relativePath) {
+      if (!relativePath) {
+        showToast('This row has no editable post file reference', 'warning');
+        return;
+      }
+      switchView('post-drafts');
+      loadPostDraftsList(relativePath);
+    }
+
+    function openPostDraftEditor(relativePath, options = {}) {
+      if (relativePath === activePostDraftPath && !postDraftDirty && !options.forceReload) {
+        renderPostDraftsList();
+        return;
+      }
+
+      if (postDraftDirty && relativePath !== activePostDraftPath) {
+        if (!confirm('You have unsaved changes. Open another draft anyway?')) {
+          return;
+        }
+        postDraftDirty = false;
+      }
+
+      const requestId = ++postDraftRequestSeq;
+      const encodedPath = relativePath.split('/').map(encodeURIComponent).join('/');
+      fetch(`/api/posts/${encodedPath}`)
+        .then(res => res.json().then(data => ({ ok: res.ok, data })))
+        .then(({ ok, data }) => {
+          if (requestId !== postDraftRequestSeq) return;
+          if (!ok || data.error) throw new Error(data.error || 'Failed to open post draft');
+
+          activePostDraftPath = data.relative_path;
+          postDraftSavedMarkdown = data.generated_post || '';
+          postDraftDirty = false;
+
+          document.getElementById('post-editor-empty').style.display = 'none';
+          document.getElementById('post-editor-panel').style.display = 'block';
+          const editorTitle = (data.workbook_link && data.workbook_link.title) || data.filename || data.relative_path;
+          document.getElementById('post-editor-title').textContent = editorTitle;
+          document.getElementById('post-editor-modified').textContent = data.modified_at ? `Modified ${data.modified_at}` : '';
+
+          const meta = [];
+          if (data.workbook_link) {
+            const link = data.workbook_link;
+            meta.push(`<div><strong>Workbook:</strong> ${escapeHtml(link.sheet_name)} · Excel row ${link.row_idx}${link.title ? ` · ${escapeHtml(link.title)}` : ''}</div>`);
+          }
+          if (data.news_section) {
+            meta.push(`<div style="margin-top:8px;"><strong>News (read-only)</strong><pre style="white-space:pre-wrap; margin-top:4px;">${escapeHtml(data.news_section)}</pre></div>`);
+          }
+          if (data.image_section) {
+            meta.push(`<div style="margin-top:8px;"><strong>Image (read-only)</strong><pre style="white-space:pre-wrap; margin-top:4px;">${escapeHtml(data.image_section)}</pre></div>`);
+          }
+          document.getElementById('post-editor-meta').innerHTML = meta.join('') || '<div>No workbook metadata linked to this file.</div>';
+
+          const quill = ensurePostDraftQuill();
+          setPostDraftEditorContent(quill, postDraftSavedMarkdown);
+          if (!options.skipListReload) {
+            renderPostDraftsList();
+          }
+        })
+        .catch(err => {
+          if (requestId !== postDraftRequestSeq) return;
+          showToast(err.message, 'error');
+        });
+    }
+
+    function savePostDraft() {
+      if (!activePostDraftPath || !postDraftQuill) {
+        showToast('Open a post draft first', 'warning');
+        return;
+      }
+
+      const generated_post = editorHtmlToMarkdown(postDraftQuill.root.innerHTML);
+      const encodedPath = activePostDraftPath.split('/').map(encodeURIComponent).join('/');
+
+      fetch(`/api/posts/${encodedPath}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ generated_post }),
+      })
+        .then(res => res.json().then(data => ({ ok: res.ok, data })))
+        .then(({ ok, data }) => {
+          if (!ok || data.error) throw new Error(data.error || 'Failed to save post draft');
+          const post = data.post || {};
+          postDraftSavedMarkdown = post.generated_post || generated_post;
+          postDraftDirty = false;
+          updatePostEditorStatus();
+          showToast('Post draft saved');
+          loadPostDraftsList(activePostDraftPath);
+        })
+        .catch(err => showToast(err.message, 'error'));
+    }
+
+    function discardPostDraftChanges() {
+      if (!activePostDraftPath || !postDraftQuill) return;
+      if (postDraftDirty && !confirm('Discard unsaved changes and reload the saved draft?')) {
+        return;
+      }
+      openPostDraftEditor(activePostDraftPath, { skipListReload: true });
+      postDraftDirty = false;
+      updatePostEditorStatus();
     }
 
     function loadWorkbooksList() {
@@ -2272,12 +2945,20 @@
     }
 
       function renderPostActionButton(sheetName, row) {
+        const sheetArg = JSON.stringify(sheetName);
         const availablePlats = row.eligible_platforms || [];
-        if (availablePlats.length === 0) {
-          const title = formatPostBlockers(row);
-          return `<button class="btn btn-secondary btn-sm" style="opacity:0.55; cursor:not-allowed;" disabled title="${escapeHtml(title)}">Post</button>`;
-        }
-        return `<button class="btn btn-secondary btn-sm" onclick="triggerPosting('linkedin', ${row.id}, '${sheetName}')">Post</button>`;
+        const postBtn = availablePlats.length === 0
+          ? `<button class="btn btn-secondary btn-sm" style="opacity:0.55; cursor:not-allowed;" disabled title="${escapeHtml(formatPostBlockers(row))}">Post</button>`
+          : `<button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); triggerPosting('linkedin', ${row.id}, ${sheetArg})">Post</button>`;
+        const editBtn = row.linkedin_draft_file
+          ? `<button class="btn btn-sm" title="Edit LinkedIn draft file" onclick="event.stopPropagation(); openPostDraftFromRow(${JSON.stringify(row.linkedin_draft_file)})">Edit</button>`
+          : '';
+        return `<div class="row-actions">
+          ${postBtn}
+          ${editBtn}
+          <button class="btn btn-sm" title="Regenerate LinkedIn draft" onclick="event.stopPropagation(); regenerateWorkbookRowDraft(${sheetArg}, ${row.row_idx}, ${JSON.stringify(row.title || '')})">Regen</button>
+          <button class="btn btn-danger btn-sm" title="Delete article row" onclick="event.stopPropagation(); deleteWorkbookRow(${sheetArg}, ${row.row_idx}, ${JSON.stringify(row.title || '')})">Delete</button>
+        </div>`;
       }
 
       function triggerPosting(platform, rowId, sheetName) {
@@ -2943,7 +3624,7 @@
       function submitDraftRun(event) {
         event.preventDefault();
 
-        const keywords_path = document.getElementById('draft-keywords-path').value.trim() || 'keywords.txt';
+        const keywords_path = keywordsSourcePath || document.getElementById('draft-keywords-path').value.trim() || 'keywords.txt';
         const platforms = 'linkedin';
         const limit = parseInt(document.getElementById('draft-limit').value, 10);
       const statusContainer = document.getElementById('draft-run-status');
