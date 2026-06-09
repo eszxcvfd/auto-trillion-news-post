@@ -581,6 +581,167 @@
       min-height: 120px;
     }
 
+    .dashboard-analytics {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .dashboard-charts {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    .dashboard-charts .chart-card-wide {
+      grid-column: 1 / -1;
+    }
+
+    @media (max-width: 1100px) {
+      .dashboard-analytics {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      .dashboard-charts {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .kpi-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: 14px 16px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .kpi-label {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+
+    .kpi-value {
+      font-size: 1.5rem;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      line-height: 1.1;
+    }
+
+    .kpi-value.accent { color: var(--accent); }
+    .kpi-value.success { color: var(--status-success); }
+    .kpi-value.warning { color: var(--status-warning); }
+    .kpi-value.error { color: var(--status-error); }
+
+    .kpi-sub {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    .chart-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: 16px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .chart-card-title {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-main);
+      margin-bottom: 14px;
+    }
+
+    .chart-bar-row {
+      display: grid;
+      grid-template-columns: 108px 1fr 36px;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+      font-size: 0.75rem;
+    }
+
+    .chart-bar-label {
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .chart-bar-track {
+      height: 8px;
+      background: var(--bg-inset);
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+    }
+
+    .chart-bar-fill {
+      height: 100%;
+      border-radius: var(--radius-sm);
+      transition: width 0.35s ease;
+      min-width: 2px;
+    }
+
+    .chart-bar-count {
+      text-align: right;
+      font-weight: 600;
+      color: var(--text-main);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .pipeline-stage {
+      display: grid;
+      grid-template-columns: 140px 1fr 40px;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 10px;
+      font-size: 0.78rem;
+    }
+
+    .pipeline-stage-label {
+      color: var(--text-muted);
+    }
+
+    .dashboard-filters-card {
+      margin-bottom: 16px;
+      padding: 14px 16px !important;
+    }
+
+    .dashboard-filters {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      gap: 12px;
+    }
+
+    .dashboard-filters .form-group {
+      margin-bottom: 0;
+      min-width: 160px;
+      flex: 1;
+    }
+
+    .dashboard-filters .form-group.filter-search {
+      min-width: 220px;
+      flex: 2;
+    }
+
+    .dashboard-filter-meta {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-left: auto;
+      align-self: center;
+      white-space: nowrap;
+    }
+
+    #workbook-table .col-sheet.hidden-col {
+      display: none;
+    }
+
     .modal-overlay {
       position: fixed;
       inset: 0;
@@ -914,6 +1075,58 @@
     <div class="content-viewport">
       <!-- Dashboard View -->
       <div id="view-dashboard" class="view active">
+        <div class="dashboard-analytics" id="dashboard-kpi-grid">
+          <!-- KPI cards rendered dynamically -->
+        </div>
+
+        <div class="dashboard-charts" id="dashboard-charts">
+          <div class="chart-card">
+            <div class="chart-card-title">LinkedIn Posting Status</div>
+            <div id="chart-status-dist"></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-card-title">Rows per Category Sheet</div>
+            <div id="chart-sheet-dist"></div>
+          </div>
+          <div class="chart-card chart-card-wide">
+            <div class="chart-card-title">Posting Pipeline</div>
+            <div id="chart-pipeline"></div>
+          </div>
+        </div>
+
+        <div class="card dashboard-filters-card">
+          <div class="dashboard-filters">
+            <div class="form-group filter-search">
+              <label for="dash-filter-query">Search title</label>
+              <input type="search" id="dash-filter-query" class="form-control" placeholder="Filter by headline…" oninput="onDashboardFilterChange()">
+            </div>
+            <div class="form-group">
+              <label for="dash-filter-status">LinkedIn status</label>
+              <select id="dash-filter-status" class="form-control" onchange="onDashboardFilterChange()">
+                <option value="all">All statuses</option>
+                <option value="ready">Ready to post</option>
+                <option value="posted">Posted</option>
+                <option value="pending">Pending</option>
+                <option value="skipped">Skipped</option>
+                <option value="error">Error</option>
+                <option value="login-required">Login required</option>
+                <option value="no-draft">No draft</option>
+                <option value="broken-draft">Broken draft ref</option>
+                <option value="blocked">Blocked</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="dash-filter-scope">Scope</label>
+              <select id="dash-filter-scope" class="form-control" onchange="onDashboardFilterChange()">
+                <option value="sheet">Current sheet only</option>
+                <option value="all">All sheets</option>
+              </select>
+            </div>
+            <button type="button" class="btn btn-secondary" onclick="clearDashboardFilters()">Clear</button>
+            <div class="dashboard-filter-meta" id="dashboard-filter-meta">Showing all rows</div>
+          </div>
+        </div>
+
         <div class="card">
           <div class="card-title" style="flex-wrap: wrap; gap: 8px;">
             <span>Workbook Inspection</span>
@@ -933,6 +1146,7 @@
               <thead>
                 <tr>
                   <th style="width: 50px;" title="Article ID from the Excel # column (not the Excel row number)">ID</th>
+                  <th class="col-sheet hidden-col">Sheet</th>
                   <th>Title</th>
                   <th>Image Path / Drive URL</th>
                   <th>Link Post Status</th>
@@ -941,7 +1155,7 @@
               </thead>
               <tbody id="workbook-table-body">
                 <!-- Rows loaded dynamically -->
-                <tr><td colspan="5" style="text-align:center; padding: 40px; color:var(--text-muted);">Loading sheets...</td></tr>
+                <tr><td colspan="6" style="text-align:center; padding: 40px; color:var(--text-muted);">Loading sheets...</td></tr>
               </tbody>
             </table>
           </div>
@@ -1045,29 +1259,55 @@
           
           <form id="writeback-form" onsubmit="submitWriteback(event)">
             <div class="form-group">
-              <label for="wb-sheet">Category Sheet Name</label>
-              <input type="text" id="wb-sheet" class="form-control" placeholder="e.g. Payment" required>
+              <label for="wb-sheet">Category Sheet</label>
+              <select id="wb-sheet" class="form-control" onchange="onWritebackSheetChange()" required>
+                <option value="">Select sheet...</option>
+              </select>
             </div>
             
             <div class="form-group">
-              <label for="wb-row">Row Index (1-based, matching Excel row number)</label>
-              <input type="number" id="wb-row" class="form-control" placeholder="e.g. 2" required min="1">
-            </div>
-            
-              <div class="form-group">
-                <label>Platform Name</label>
-                <input type="text" class="form-control" value="LinkedIn" disabled>
-              </div>
-            
-            <div class="form-group">
-              <label for="wb-status">Status Value</label>
-              <input type="text" id="wb-status" class="form-control" placeholder="e.g. https://... or [skip] reason" required>
+              <label for="wb-row">Row</label>
+              <select id="wb-row" class="form-control" onchange="updateWritebackPreview()" required disabled>
+                <option value="">Select a sheet first...</option>
+              </select>
               <small style="color:var(--text-muted); font-size:0.75rem; margin-top:4px; display:block;">
-                For success: Enter URL or [posted-no-link]. For skip: [skip] &lt;reason&gt;. For error: [error] &lt;reason&gt;.
+                Excel row number is used for write-back.
               </small>
             </div>
             
-            <button type="submit" class="btn btn-primary" style="margin-top:10px;">Write Result to Cell</button>
+            <div class="form-group">
+              <label>Platform</label>
+              <div class="form-control" style="background:var(--bg-subtle); color:var(--text-secondary); cursor:default;">LinkedIn</div>
+            </div>
+            
+            <div class="form-group">
+              <label for="wb-status-preset">Result</label>
+              <select id="wb-status-preset" class="form-control" onchange="onWritebackStatusChange()" required>
+                <option value="[posted-no-link]">Posted without permalink</option>
+                <option value="[pending]">Pending</option>
+                <option value="[login-required]">Login required</option>
+                <option value="[skip] Already posted">Skip — already posted</option>
+                <option value="[skip] No draft content">Skip — no draft content</option>
+                <option value="[skip] Not eligible">Skip — not eligible</option>
+                <option value="[skip] Operator skipped">Skip — operator skipped</option>
+                <option value="[error] Upload failed">Error — upload failed</option>
+                <option value="[error] Browser timeout">Error — browser timeout</option>
+                <option value="[error] Session expired">Error — session expired</option>
+                <option value="__custom_url__">Success — post URL</option>
+              </select>
+            </div>
+
+            <div id="wb-status-url-wrap" class="form-group" style="display:none;">
+              <label for="wb-status-url">Post URL</label>
+              <input type="url" id="wb-status-url" class="form-control" placeholder="https://www.linkedin.com/feed/update/..." oninput="updateWritebackPreview()">
+            </div>
+
+            <div class="form-group">
+              <label>Link Post Preview</label>
+              <div id="wb-status-preview" class="form-control" style="background:var(--bg-subtle); font-family:monospace; font-size:0.85rem; color:var(--accent-cyan); cursor:default;">LinkedIn: [posted-no-link]</div>
+            </div>
+            
+            <button type="submit" class="btn btn-primary" style="width:100%; margin-top:10px;">Write Result to Cell</button>
           </form>
         </div>
       </div>
@@ -1152,40 +1392,59 @@
             <div class="card-title">Add Schedule</div>
             <form id="add-schedule-form" onsubmit="submitAddSchedule(event)">
               <div class="form-group">
-                <label for="sch-name">Schedule Name</label>
-                <input type="text" id="sch-name" class="form-control" placeholder="e.g. daily-fintech" required>
-              </div>
-              <div class="form-group">
-                <label for="sch-expression">Recurrence Expression</label>
-                <input type="text" id="sch-expression" class="form-control" placeholder="e.g. 0 9 * * * or every 15m" required>
-                <small style="color:var(--text-muted); font-size:0.75rem; margin-top:4px; display:block;">
-                  Use 5-field cron or interval like <code>every 15m</code>, <code>every 2h</code>, <code>every 1d</code>.
-                </small>
-              </div>
-              <div class="form-group">
                 <label for="sch-job-type">Job Type</label>
-                <select id="sch-job-type" class="form-control" onchange="toggleJobTypeFields()" required>
-                  <option value="draft">Harvest & Generate (draft)</option>
-                  <option value="post">Confirm & Post (post)</option>
+                <select id="sch-job-type" class="form-control" onchange="onScheduleFormChange()" required>
+                  <option value="draft">Harvest &amp; Generate (draft)</option>
+                  <option value="post">Confirm &amp; Post (post)</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="sch-recurrence">Recurrence</label>
+                <select id="sch-recurrence" class="form-control" onchange="onScheduleFormChange()" required>
+                  <option value="every 15m">Every 15 minutes</option>
+                  <option value="every 1h">Every hour</option>
+                  <option value="every 2h">Every 2 hours</option>
+                  <option value="every 1d">Every day</option>
+                  <option value="0 9 * * *" selected>Daily at 9:00 AM</option>
+                  <option value="0 12 * * *">Daily at 12:00 PM</option>
+                  <option value="0 18 * * *">Daily at 6:00 PM</option>
+                  <option value="0 9 * * 1">Weekly — Monday 9:00 AM</option>
+                  <option value="0 9 * * 5">Weekly — Friday 9:00 AM</option>
                 </select>
               </div>
               <div id="post-job-only-fields" style="display:none;">
                 <div class="form-group">
-                  <label for="sch-workbook">Workbook Path (Optional)</label>
-                  <input type="text" id="sch-workbook" class="form-control" placeholder="Defaults to active workbook">
+                  <label for="sch-workbook">Workbook</label>
+                  <select id="sch-workbook" class="form-control" onchange="onScheduleFormChange()">
+                    <option value="">Active workbook (default)</option>
+                  </select>
                 </div>
                 <div class="form-group">
-                  <label for="sch-sheet">Sheet Name (Optional)</label>
-                  <input type="text" id="sch-sheet" class="form-control" placeholder="e.g. Payment (all if empty)">
+                  <label for="sch-sheet">Sheet</label>
+                  <select id="sch-sheet" class="form-control" onchange="onScheduleFormChange()">
+                    <option value="">All sheets</option>
+                  </select>
                 </div>
               </div>
-                <div class="form-group">
-                  <label>Platforms</label>
-                  <input type="text" class="form-control" value="LinkedIn" disabled>
-                </div>
               <div class="form-group">
-                <label for="sch-limit">Post Limit (Per Platform)</label>
-                <input type="number" id="sch-limit" class="form-control" value="2" min="1">
+                <label>Platform</label>
+                <div class="form-control" style="background:var(--bg-subtle); color:var(--text-secondary); cursor:default;">LinkedIn</div>
+              </div>
+              <div class="form-group">
+                <label for="sch-limit">Post Limit (per run)</label>
+                <select id="sch-limit" class="form-control">
+                  <option value="1">1 post</option>
+                  <option value="2" selected>2 posts</option>
+                  <option value="3">3 posts</option>
+                  <option value="5">5 posts</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Schedule Name</label>
+                <div id="sch-name-preview" class="form-control" style="background:var(--bg-subtle); font-family:monospace; font-size:0.85rem; color:var(--accent-cyan); cursor:default;">draft-daily-9am-all-sheets</div>
+                <small style="color:var(--text-muted); font-size:0.75rem; margin-top:4px; display:block;">
+                  Auto-generated from the selections above.
+                </small>
               </div>
               <button type="submit" class="btn btn-primary" style="width:100%; margin-top:10px;">Create Schedule</button>
             </form>
@@ -1305,6 +1564,31 @@
     let draftRunTimer = null;
     let currentDraftRunId = null;
     let openRows = new Set(); // Track expanded rows
+    let dashboardFilters = { query: '', status: 'all', scope: 'sheet' };
+
+    const DASHBOARD_STATUS_LABELS = {
+      ready: 'Ready to post',
+      posted: 'Posted',
+      pending: 'Pending',
+      skipped: 'Skipped',
+      error: 'Error',
+      'login-required': 'Login required',
+      'no-draft': 'No draft',
+      'broken-draft': 'Broken draft',
+      blocked: 'Blocked',
+    };
+
+    const DASHBOARD_STATUS_COLORS = {
+      ready: 'var(--status-info)',
+      posted: 'var(--status-success)',
+      pending: 'var(--status-pending)',
+      skipped: 'var(--status-warning)',
+      error: 'var(--status-error)',
+      'login-required': 'var(--status-error)',
+      'no-draft': 'var(--text-muted)',
+      'broken-draft': 'var(--status-warning)',
+      blocked: 'var(--text-muted)',
+    };
 
     function toggleTheme() {
       const root = document.documentElement;
@@ -1356,7 +1640,10 @@
       } else if (viewName === 'config') {
         loadConfig();
         loadWorkbooksList();
+      } else if (viewName === 'writeback') {
+        initWritebackForm();
       } else if (viewName === 'schedules') {
+        initScheduleForm();
         loadSchedules();
       } else if (viewName === 'history') {
         loadHistory();
@@ -1486,6 +1773,183 @@
       return fallback;
     }
 
+    function readDashboardFiltersFromUi() {
+      dashboardFilters.query = (document.getElementById('dash-filter-query')?.value || '').trim().toLowerCase();
+      dashboardFilters.status = document.getElementById('dash-filter-status')?.value || 'all';
+      dashboardFilters.scope = document.getElementById('dash-filter-scope')?.value || 'sheet';
+    }
+
+    function classifyRowStatus(row) {
+      const linkPost = row.link_post_raw || '';
+      const linkedinLine = linkPost.split('\n').map(l => l.trim()).find(l => l.toLowerCase().startsWith('linkedin:'));
+      const value = linkedinLine ? linkedinLine.split(':', 2).slice(1).join(':').trim() : '';
+
+      if (value.startsWith('http')) return 'posted';
+      if (value.includes('[posted-no-link]')) return 'posted';
+      if (value.includes('[pending]')) return 'pending';
+      if (value.includes('[skip]')) return 'skipped';
+      if (value.includes('[error]')) return 'error';
+      if (value.includes('[login-required]')) return 'login-required';
+
+      if (row.broken_draft_refs && row.broken_draft_refs.linkedin) return 'broken-draft';
+      if (!row.linkedin_draft) return 'no-draft';
+      if ((row.eligible_platforms || []).length > 0) return 'ready';
+      return 'blocked';
+    }
+
+    function rowMatchesDashboardFilters(row, sheetName) {
+      if (dashboardFilters.query) {
+        const title = String(row.title || '').toLowerCase();
+        if (!title.includes(dashboardFilters.query)) return false;
+      }
+      if (dashboardFilters.status !== 'all' && classifyRowStatus(row) !== dashboardFilters.status) {
+        return false;
+      }
+      return true;
+    }
+
+    function collectDashboardRowEntries(scopeSheetName) {
+      const entries = [];
+      sheetsData.forEach(sheet => {
+        (sheet.rows || []).forEach(row => {
+          entries.push({ sheetName: sheet.name, row });
+        });
+      });
+      if (dashboardFilters.scope === 'sheet' && scopeSheetName) {
+        return entries.filter(entry => entry.sheetName === scopeSheetName);
+      }
+      return entries;
+    }
+
+    function getFilteredDashboardEntries(scopeSheetName) {
+      return collectDashboardRowEntries(scopeSheetName).filter(entry => rowMatchesDashboardFilters(entry.row, entry.sheetName));
+    }
+
+    function getAnalyticsEntries() {
+      const scopeSheet = dashboardFilters.scope === 'sheet' ? resolveActiveSheetName() : null;
+      return collectDashboardRowEntries(scopeSheet);
+    }
+
+    function renderHorizontalBarChart(containerId, items, emptyLabel) {
+      const container = document.getElementById(containerId);
+      if (!container) return;
+      if (!items.length) {
+        container.innerHTML = `<div style="color:var(--text-muted); font-size:0.8rem;">${emptyLabel}</div>`;
+        return;
+      }
+      const max = Math.max(...items.map(item => item.count), 1);
+      container.innerHTML = items.map(item => `
+        <div class="chart-bar-row">
+          <div class="chart-bar-label" title="${escapeHtml(item.label)}">${escapeHtml(item.label)}</div>
+          <div class="chart-bar-track">
+            <div class="chart-bar-fill" style="width:${(item.count / max) * 100}%; background:${item.color};"></div>
+          </div>
+          <div class="chart-bar-count">${item.count}</div>
+        </div>
+      `).join('');
+    }
+
+    function renderDashboardAnalytics() {
+      const entries = getAnalyticsEntries();
+      const total = entries.length;
+      const statusCounts = {};
+      Object.keys(DASHBOARD_STATUS_LABELS).forEach(key => { statusCounts[key] = 0; });
+      entries.forEach(({ row }) => {
+        const status = classifyRowStatus(row);
+        statusCounts[status] = (statusCounts[status] || 0) + 1;
+      });
+
+      const ready = statusCounts.ready || 0;
+      const posted = statusCounts.posted || 0;
+      const blocked = (statusCounts.blocked || 0) + (statusCounts['no-draft'] || 0) + (statusCounts['broken-draft'] || 0);
+      const issues = (statusCounts.error || 0) + (statusCounts['login-required'] || 0) + (statusCounts.skipped || 0);
+
+      const kpiGrid = document.getElementById('dashboard-kpi-grid');
+      if (kpiGrid) {
+        const scopeLabel = dashboardFilters.scope === 'all' ? 'all sheets' : (resolveActiveSheetName() || 'sheet');
+        kpiGrid.innerHTML = `
+          <div class="kpi-card"><div class="kpi-label">Total rows</div><div class="kpi-value accent">${total}</div><div class="kpi-sub">${escapeHtml(scopeLabel)}</div></div>
+          <div class="kpi-card"><div class="kpi-label">Ready to post</div><div class="kpi-value">${ready}</div><div class="kpi-sub">Eligible LinkedIn targets</div></div>
+          <div class="kpi-card"><div class="kpi-label">Posted</div><div class="kpi-value success">${posted}</div><div class="kpi-sub">URL or no-link success</div></div>
+          <div class="kpi-card"><div class="kpi-label">Needs attention</div><div class="kpi-value warning">${issues}</div><div class="kpi-sub">Error, skip, login</div></div>
+          <div class="kpi-card"><div class="kpi-label">Incomplete</div><div class="kpi-value error">${blocked}</div><div class="kpi-sub">No/broken draft or blocked</div></div>
+        `;
+      }
+
+      const statusItems = Object.entries(statusCounts)
+        .filter(([, count]) => count > 0)
+        .map(([key, count]) => ({
+          label: DASHBOARD_STATUS_LABELS[key] || key,
+          count,
+          color: DASHBOARD_STATUS_COLORS[key] || 'var(--accent)',
+        }))
+        .sort((a, b) => b.count - a.count);
+      renderHorizontalBarChart('chart-status-dist', statusItems, 'No rows in current analytics scope.');
+
+      const sheetCounts = {};
+      entries.forEach(({ sheetName }) => {
+        sheetCounts[sheetName] = (sheetCounts[sheetName] || 0) + 1;
+      });
+      const sheetItems = Object.entries(sheetCounts)
+        .map(([label, count]) => ({ label, count, color: 'var(--accent-cyan)' }))
+        .sort((a, b) => b.count - a.count);
+      renderHorizontalBarChart('chart-sheet-dist', sheetItems, 'No sheet breakdown available.');
+
+      const withDraft = entries.filter(({ row }) => !!row.linkedin_draft).length;
+      const pipelineItems = [
+        { label: 'Rows in scope', count: total, color: 'var(--accent)' },
+        { label: 'With LinkedIn draft', count: withDraft, color: 'var(--status-info)' },
+        { label: 'Ready to post', count: ready, color: 'var(--status-pending)' },
+        { label: 'Posted', count: posted, color: 'var(--status-success)' },
+      ];
+      const pipelineMax = Math.max(...pipelineItems.map(item => item.count), 1);
+      const pipelineEl = document.getElementById('chart-pipeline');
+      if (pipelineEl) {
+        pipelineEl.innerHTML = pipelineItems.map(item => `
+          <div class="pipeline-stage">
+            <div class="pipeline-stage-label">${escapeHtml(item.label)}</div>
+            <div class="chart-bar-track" style="height:10px;">
+              <div class="chart-bar-fill" style="width:${(item.count / pipelineMax) * 100}%; background:${item.color};"></div>
+            </div>
+            <div class="chart-bar-count">${item.count}</div>
+          </div>
+        `).join('');
+      }
+    }
+
+    function updateDashboardFilterMeta(filteredCount, totalInView) {
+      const meta = document.getElementById('dashboard-filter-meta');
+      if (!meta) return;
+      if (filteredCount === totalInView) {
+        meta.textContent = `Showing ${filteredCount} row${filteredCount === 1 ? '' : 's'}`;
+      } else {
+        meta.textContent = `Showing ${filteredCount} of ${totalInView}`;
+      }
+    }
+
+    function updateDashboardSheetColumnVisibility() {
+      const showSheet = dashboardFilters.scope === 'all';
+      document.querySelectorAll('#workbook-table .col-sheet').forEach(cell => {
+        cell.classList.toggle('hidden-col', !showSheet);
+      });
+    }
+
+    function onDashboardFilterChange() {
+      readDashboardFiltersFromUi();
+      renderDashboardAnalytics();
+      renderDashboardSheets();
+    }
+
+    function clearDashboardFilters() {
+      const query = document.getElementById('dash-filter-query');
+      const status = document.getElementById('dash-filter-status');
+      const scope = document.getElementById('dash-filter-scope');
+      if (query) query.value = '';
+      if (status) status.value = 'all';
+      if (scope) scope.value = 'sheet';
+      onDashboardFilterChange();
+    }
+
     function renderDashboardSheets() {
       const tbody = document.getElementById('workbook-table-body');
       const tabsContainer = document.getElementById('sheet-tabs');
@@ -1493,25 +1957,46 @@
         return;
       }
 
+      readDashboardFiltersFromUi();
       tabsContainer.innerHTML = '';
 
       if (!sheetsData.length) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding: 40px; color:var(--text-muted);">No sheets found in business workbook.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding: 40px; color:var(--text-muted);">No sheets found in business workbook.</td></tr>';
+        renderDashboardAnalytics();
         return;
       }
 
       const activeSheet = resolveActiveSheetName();
+      const allSheetsMode = dashboardFilters.scope === 'all';
 
       sheetsData.forEach(sheet => {
         const tab = document.createElement('div');
-        tab.className = `tab${sheet.name === activeSheet ? ' active' : ''}`;
+        const filteredCount = getFilteredDashboardEntries(sheet.name).length;
+        const isActive = !allSheetsMode && sheet.name === activeSheet;
+        tab.className = `tab${isActive ? ' active' : ''}`;
         tab.dataset.sheetName = sheet.name;
-        tab.textContent = sheet.name;
-        tab.onclick = () => selectSheet(sheet.name);
+        tab.textContent = `${sheet.name} (${filteredCount})`;
+        tab.onclick = () => {
+          if (dashboardFilters.scope === 'all') {
+            const scopeSelect = document.getElementById('dash-filter-scope');
+            if (scopeSelect) scopeSelect.value = 'sheet';
+            dashboardFilters.scope = 'sheet';
+            renderDashboardAnalytics();
+          }
+          selectSheet(sheet.name);
+        };
+        if (allSheetsMode) {
+          tab.style.opacity = '0.65';
+        }
         tabsContainer.appendChild(tab);
       });
 
-      renderSheetRows(activeSheet);
+      if (allSheetsMode) {
+        renderSheetRows(null, getFilteredDashboardEntries(null));
+      } else {
+        renderSheetRows(activeSheet, getFilteredDashboardEntries(activeSheet));
+      }
+      updateDashboardSheetColumnVisibility();
     }
 
     function updateDashboardMeta(data) {
@@ -1544,7 +2029,7 @@
         if (tabsContainer) {
           tabsContainer.innerHTML = '';
         }
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding: 40px; color:var(--text-muted);"><div class="spinner" style="vertical-align:middle;margin-right:10px;"></div>Ingesting Excel sheets...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding: 40px; color:var(--text-muted);"><div class="spinner" style="vertical-align:middle;margin-right:10px;"></div>Ingesting Excel sheets...</td></tr>';
       }
 
       fetch(`/api/workbook/inspect?_=${Date.now()}`, { cache: 'no-store' })
@@ -1561,6 +2046,7 @@
 
           sheetsData = data.sheets || [];
           updateDashboardMeta(data);
+          renderDashboardAnalytics();
           renderDashboardSheets();
         })
         .catch(err => {
@@ -1570,17 +2056,25 @@
           if (tabsContainer && !hasCachedSheets) {
             tabsContainer.innerHTML = '';
           }
-          tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding: 40px; color:var(--status-error); font-weight:500;">${escapeHtml(err.message)}</td></tr>`;
+          tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 40px; color:var(--status-error); font-weight:500;">${escapeHtml(err.message)}</td></tr>`;
           showToast(err.message, 'error');
         });
     }
 
     function selectSheet(name) {
       currentSheetName = name;
+      readDashboardFiltersFromUi();
       document.querySelectorAll('#sheet-tabs .tab').forEach(tab => {
-        tab.classList.toggle('active', tab.dataset.sheetName === name);
+        const isActive = dashboardFilters.scope !== 'all' && tab.dataset.sheetName === name;
+        tab.classList.toggle('active', isActive);
+        tab.style.opacity = dashboardFilters.scope === 'all' ? '0.65' : '1';
       });
-      renderSheetRows(name);
+      if (dashboardFilters.scope === 'all') {
+        renderSheetRows(null, getFilteredDashboardEntries(null));
+      } else {
+        renderSheetRows(name, getFilteredDashboardEntries(name));
+      }
+      updateDashboardSheetColumnVisibility();
     }
 
     function openDashboardSheet(sheetName) {
@@ -1591,49 +2085,64 @@
       }
     }
 
-    function renderSheetRows(sheetName) {
+    function renderSheetRows(sheetName, filteredEntries) {
       const tbody = document.getElementById('workbook-table-body');
       tbody.innerHTML = '';
-      
-      const sheet = sheetsData.find(s => s.name === sheetName);
-      if (!sheet || sheet.rows.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding: 20px; color:var(--text-muted);">No rows in this sheet.</td></tr>';
+      readDashboardFiltersFromUi();
+
+      const entries = filteredEntries || (sheetName
+        ? getFilteredDashboardEntries(sheetName)
+        : getFilteredDashboardEntries(null));
+      const scopeForMeta = dashboardFilters.scope === 'all'
+        ? null
+        : (sheetName || resolveActiveSheetName());
+      const totalInView = collectDashboardRowEntries(scopeForMeta).length;
+      updateDashboardFilterMeta(entries.length, totalInView);
+      updateDashboardSheetColumnVisibility();
+
+      const showSheetColumn = dashboardFilters.scope === 'all';
+      const colspan = showSheetColumn ? 6 : 5;
+
+      if (!entries.length) {
+        const emptyMsg = dashboardFilters.query || dashboardFilters.status !== 'all'
+          ? 'No rows match the current filters.'
+          : (sheetName ? 'No rows in this sheet.' : 'No rows in workbook.');
+        tbody.innerHTML = `<tr><td colspan="${colspan}" style="text-align:center; padding: 20px; color:var(--text-muted);">${emptyMsg}</td></tr>`;
         return;
       }
-      
-      sheet.rows.forEach(row => {
-        const isExpanded = openRows.has(`${sheetName}-${row.row_idx}`);
-        
-        // Row Status Badge for Excel Row status
-        let postStatusSummary = renderStatusSummary(row.link_post_raw);
-        
+
+      entries.forEach(({ sheetName: entrySheet, row }) => {
+        const isExpanded = openRows.has(`${entrySheet}-${row.row_idx}`);
+        const postStatusSummary = renderStatusSummary(row.link_post_raw);
+        const statusKey = classifyRowStatus(row);
+        const statusBadge = `<span class="badge badge-muted" style="margin-left:6px; font-size:0.65rem;">${escapeHtml(DASHBOARD_STATUS_LABELS[statusKey] || statusKey)}</span>`;
+
         const tr = document.createElement('tr');
         tr.className = 'workbook-row';
-        tr.id = `row-${row.row_idx}`;
+        tr.id = `row-${entrySheet}-${row.row_idx}`;
         tr.style.cursor = 'pointer';
         tr.onclick = (e) => {
-          // Ignore clicks on buttons/actions
           if (e.target.closest('button') || e.target.closest('.actions')) return;
-          toggleExpandRow(sheetName, row);
+          toggleExpandRow(entrySheet, row);
         };
-        
+
         tr.innerHTML = `
           <td><strong>${row.id}</strong></td>
-          <td style="font-weight:500;">${row.title}</td>
-          <td><span class="text-mono text-accent">${row.image_link || 'None'}</span></td>
-          <td>${postStatusSummary}</td>
+          <td class="col-sheet${showSheetColumn ? '' : ' hidden-col'}"><span class="badge badge-info" style="font-size:0.7rem;">${escapeHtml(entrySheet)}</span></td>
+          <td style="font-weight:500;">${escapeHtml(row.title || '')}</td>
+          <td><span class="text-mono text-accent">${escapeHtml(row.image_link || 'None')}</span></td>
+          <td>${postStatusSummary}${statusBadge}</td>
           <td style="text-align:right;" class="actions">
-            ${renderPostActionButton(sheetName, row)}
+            ${renderPostActionButton(entrySheet, row)}
           </td>
         `;
         tbody.appendChild(tr);
-        
-        // Render details row if expanded
+
         if (isExpanded) {
           const detailTr = document.createElement('tr');
           detailTr.className = 'expanded-row-details';
           detailTr.innerHTML = `
-            <td colspan="5">
+            <td colspan="${colspan}">
               <div class="expanded-content">
                 <div>
                   <h4 style="margin-bottom:12px; font-size:0.85rem; text-transform:uppercase; color:var(--text-muted);">Generated Post Drafts</h4>
@@ -1644,9 +2153,10 @@
                 <div>
                   <h4 style="margin-bottom:12px; font-size:0.85rem; text-transform:uppercase; color:var(--text-muted);">Row Ingestion Data</h4>
                   <div class="meta-panel">
+                    <div><strong>Sheet:</strong> ${escapeHtml(entrySheet)}</div>
                     <div><strong>Row Number:</strong> Excel index ${row.row_idx}</div>
                     <div style="margin-top:6px;"><strong>Raw Link Post Text:</strong></div>
-                    <pre>${row.link_post_raw || 'None'}</pre>
+                    <pre>${escapeHtml(row.link_post_raw || 'None')}</pre>
                   </div>
                 </div>
               </div>
@@ -2541,15 +3051,146 @@
       }
     }
 
-    // Manual Writeback submit
+    // --- Manual Result Write-back ---
+
+    let writebackRowsBySheet = {};
+
+    function truncateWritebackLabel(text, maxLen = 48) {
+      const value = String(text || '').trim();
+      if (!value) return 'Untitled';
+      return value.length > maxLen ? `${value.slice(0, maxLen - 1)}…` : value;
+    }
+
+    function resolveWritebackStatus() {
+      const preset = document.getElementById('wb-status-preset').value;
+      if (preset === '__custom_url__') {
+        const url = document.getElementById('wb-status-url').value.trim();
+        if (!url) {
+          throw new Error('Post URL is required for a successful write-back.');
+        }
+        return url;
+      }
+      return preset;
+    }
+
+    function updateWritebackPreview() {
+      const preview = document.getElementById('wb-status-preview');
+      if (!preview) return;
+      try {
+        const status = resolveWritebackStatus();
+        preview.textContent = `LinkedIn: ${status}`;
+      } catch (err) {
+        preview.textContent = 'LinkedIn: (enter post URL)';
+      }
+    }
+
+    function onWritebackStatusChange() {
+      const preset = document.getElementById('wb-status-preset').value;
+      const urlWrap = document.getElementById('wb-status-url-wrap');
+      const urlInput = document.getElementById('wb-status-url');
+      const needsUrl = preset === '__custom_url__';
+      if (urlWrap) urlWrap.style.display = needsUrl ? 'block' : 'none';
+      if (urlInput) urlInput.required = needsUrl;
+      updateWritebackPreview();
+    }
+
+    function populateWritebackSheetOptions(sheets) {
+      const select = document.getElementById('wb-sheet');
+      if (!select) return;
+      const currentValue = select.value;
+      select.innerHTML = '<option value="">Select sheet...</option>';
+      (sheets || []).forEach(sheet => {
+        const option = document.createElement('option');
+        option.value = sheet.name;
+        option.textContent = sheet.name;
+        select.appendChild(option);
+      });
+      if (currentValue && Array.from(select.options).some(opt => opt.value === currentValue)) {
+        select.value = currentValue;
+      }
+      onWritebackSheetChange();
+    }
+
+    function populateWritebackRowOptions(sheetName) {
+      const select = document.getElementById('wb-row');
+      if (!select) return;
+      const rows = writebackRowsBySheet[sheetName] || [];
+      select.innerHTML = '';
+      if (!sheetName) {
+        select.disabled = true;
+        select.innerHTML = '<option value="">Select a sheet first...</option>';
+        updateWritebackPreview();
+        return;
+      }
+      if (rows.length === 0) {
+        select.disabled = true;
+        select.innerHTML = '<option value="">No rows in this sheet</option>';
+        updateWritebackPreview();
+        return;
+      }
+      select.disabled = false;
+      select.innerHTML = '<option value="">Select row...</option>';
+      rows.forEach(row => {
+        const option = document.createElement('option');
+        option.value = String(row.row_idx);
+        const rowLabel = row.id != null ? `#${row.id}` : `Row ${row.row_idx}`;
+        option.textContent = `${rowLabel} — ${truncateWritebackLabel(row.title)} (Excel row ${row.row_idx})`;
+        select.appendChild(option);
+      });
+      updateWritebackPreview();
+    }
+
+    function onWritebackSheetChange() {
+      const sheetName = document.getElementById('wb-sheet').value;
+      populateWritebackRowOptions(sheetName);
+    }
+
+    function resetWritebackForm() {
+      const form = document.getElementById('writeback-form');
+      if (!form) return;
+      form.reset();
+      const urlInput = document.getElementById('wb-status-url');
+      if (urlInput) urlInput.required = false;
+      onWritebackStatusChange();
+      onWritebackSheetChange();
+    }
+
+    function initWritebackForm() {
+      writebackRowsBySheet = {};
+      fetch(`/api/workbook/inspect?_=${Date.now()}`, { cache: 'no-store' })
+        .then(res => res.ok ? res.json() : res.json().then(d => { throw new Error(d.error || 'Failed to load workbook'); }))
+        .then(data => {
+          (data.sheets || []).forEach(sheet => {
+            writebackRowsBySheet[sheet.name] = sheet.rows || [];
+          });
+          populateWritebackSheetOptions(data.sheets || []);
+        })
+        .catch(err => {
+          populateWritebackSheetOptions([]);
+          showToast(err.message || 'Could not load workbook rows for write-back', 'warning');
+        });
+      onWritebackStatusChange();
+    }
+
     function submitWriteback(event) {
       event.preventDefault();
-      
-        const sheet = document.getElementById('wb-sheet').value.trim();
-        const row = document.getElementById('wb-row').value;
-        const platform = 'linkedin';
-        const status = document.getElementById('wb-status').value.trim();
-      
+
+      const sheet = document.getElementById('wb-sheet').value;
+      const row = document.getElementById('wb-row').value;
+      const platform = 'linkedin';
+      let status;
+      try {
+        status = resolveWritebackStatus();
+      } catch (err) {
+        showToast(err.message, 'error');
+        return;
+      }
+
+      if (!sheet || !row) {
+        showToast('Select a sheet and row before writing back.', 'error');
+        return;
+      }
+
       fetch('/api/write-result', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -2561,7 +3202,7 @@
           showToast(data.error, 'error');
         } else {
           showToast('Posting result written to workbook successfully!');
-          document.getElementById('writeback-form').reset();
+          resetWritebackForm();
           loadWorkbookData();
         }
       })
@@ -2572,10 +3213,127 @@
 
     // --- Local Scheduling and Run History ---
 
+    let existingScheduleNames = new Set();
+
+    const SCHEDULE_RECURRENCE_SLUGS = {
+      'every 15m': 'every-15m',
+      'every 1h': 'every-1h',
+      'every 2h': 'every-2h',
+      'every 1d': 'every-1d',
+      '0 9 * * *': 'daily-9am',
+      '0 12 * * *': 'daily-noon',
+      '0 18 * * *': 'daily-6pm',
+      '0 9 * * 1': 'weekly-mon-9am',
+      '0 9 * * 5': 'weekly-fri-9am',
+    };
+
     function toggleJobTypeFields() {
       const jobType = document.getElementById('sch-job-type').value;
       const postFields = document.getElementById('post-job-only-fields');
       postFields.style.display = jobType === 'post' ? 'block' : 'none';
+    }
+
+    function slugifySchedulePart(value) {
+      return String(value || '')
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '') || 'all-sheets';
+    }
+
+    function buildScheduleNameBase() {
+      const jobType = document.getElementById('sch-job-type').value;
+      const expression = document.getElementById('sch-recurrence').value;
+      const sheetSelect = document.getElementById('sch-sheet');
+      const sheetName = sheetSelect && document.getElementById('sch-job-type').value === 'post'
+        ? sheetSelect.value
+        : '';
+      const recSlug = SCHEDULE_RECURRENCE_SLUGS[expression] || 'custom';
+      const sheetSlug = sheetName ? slugifySchedulePart(sheetName) : 'all-sheets';
+      return `${jobType}-${recSlug}-${sheetSlug}`;
+    }
+
+    function resolveUniqueScheduleName(baseName) {
+      if (!existingScheduleNames.has(baseName)) {
+        return baseName;
+      }
+      let suffix = 2;
+      while (existingScheduleNames.has(`${baseName}-${suffix}`)) {
+        suffix += 1;
+      }
+      return `${baseName}-${suffix}`;
+    }
+
+    function updateScheduleNamePreview() {
+      const preview = document.getElementById('sch-name-preview');
+      if (!preview) return;
+      preview.textContent = resolveUniqueScheduleName(buildScheduleNameBase());
+    }
+
+    function onScheduleFormChange() {
+      toggleJobTypeFields();
+      updateScheduleNamePreview();
+    }
+
+    function resetScheduleForm() {
+      const form = document.getElementById('add-schedule-form');
+      if (!form) return;
+      form.reset();
+      const recurrence = document.getElementById('sch-recurrence');
+      if (recurrence) recurrence.value = '0 9 * * *';
+      const limit = document.getElementById('sch-limit');
+      if (limit) limit.value = '2';
+      onScheduleFormChange();
+    }
+
+    function populateScheduleWorkbookOptions(workbooks) {
+      const select = document.getElementById('sch-workbook');
+      if (!select) return;
+      const currentValue = select.value;
+      select.innerHTML = '<option value="">Active workbook (default)</option>';
+      (workbooks || []).forEach(wb => {
+        const option = document.createElement('option');
+        option.value = wb.path;
+        option.textContent = wb.name || wb.path;
+        select.appendChild(option);
+      });
+      if (currentValue) {
+        select.value = currentValue;
+      }
+    }
+
+    function populateScheduleSheetOptions(sheets) {
+      const select = document.getElementById('sch-sheet');
+      if (!select) return;
+      const currentValue = select.value;
+      select.innerHTML = '<option value="">All sheets</option>';
+      (sheets || []).forEach(sheet => {
+        const option = document.createElement('option');
+        option.value = sheet.name;
+        option.textContent = sheet.name;
+        select.appendChild(option);
+      });
+      if (currentValue && Array.from(select.options).some(opt => opt.value === currentValue)) {
+        select.value = currentValue;
+      }
+    }
+
+    function initScheduleForm() {
+      toggleJobTypeFields();
+      updateScheduleNamePreview();
+
+      fetch('/api/workbooks')
+        .then(res => res.json())
+        .then(data => populateScheduleWorkbookOptions(data))
+        .catch(() => {});
+
+      fetch(`/api/workbook/inspect?_=${Date.now()}`, { cache: 'no-store' })
+        .then(res => res.ok ? res.json() : res.json().then(d => { throw new Error(d.error || 'Failed to load sheets'); }))
+        .then(data => populateScheduleSheetOptions(data.sheets || []))
+        .catch(err => {
+          populateScheduleSheetOptions([]);
+          showToast(err.message || 'Could not load workbook sheets for schedule form', 'warning');
+        });
     }
 
     function formatDateTime(isoString) {
@@ -2596,6 +3354,8 @@
       fetch('/api/schedules')
         .then(res => res.json())
         .then(data => {
+          existingScheduleNames = new Set((data || []).map(s => s.name));
+          updateScheduleNamePreview();
           tbody.innerHTML = '';
           if (data.length === 0) {
             tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding: 20px; color:var(--text-muted);">No schedules defined. Add one using the form.</td></tr>';
@@ -2629,7 +3389,7 @@
               </td>
               <td>
                 <label class="switch">
-                  <input type="checkbox" ${s.enabled === 1 ? 'checked' : ''} onchange="toggleScheduleActive(${s.id})">
+                  <input type="checkbox" ${s.enabled === 1 ? 'checked' : ''} onchange="toggleScheduleActive(${s.id}, this)">
                   <span class="slider"></span>
                 </label>
               </td>
@@ -2646,22 +3406,27 @@
         });
     }
 
-    function toggleScheduleActive(id) {
+    function toggleScheduleActive(id, checkboxEl) {
+      const enabled = checkboxEl.checked;
       fetch(`/api/schedules/${id}/toggle`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled })
       })
-      .then(res => res.json())
-      .then(data => {
-        if (data.error) {
-          showToast(data.error, 'error');
-        } else {
-          showToast(data.message);
-          loadSchedules();
+      .then(async res => {
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || data.error) {
+          checkboxEl.checked = !enabled;
+          throw new Error(data.error || `Request failed (${res.status})`);
         }
+        return data;
+      })
+      .then(data => {
+        showToast(data.message);
+        loadSchedules();
       })
       .catch(err => {
-        showToast('Failed to toggle schedule', 'error');
+        showToast(err.message || 'Failed to toggle schedule', 'error');
       });
     }
 
@@ -2705,13 +3470,15 @@
 
     function submitAddSchedule(event) {
       event.preventDefault();
-      const name = document.getElementById('sch-name').value.trim();
-        const expression = document.getElementById('sch-expression').value.trim();
-        const job_type = document.getElementById('sch-job-type').value;
-        const workbook_path = document.getElementById('sch-workbook') ? document.getElementById('sch-workbook').value.trim() : null;
-        const sheet_name = document.getElementById('sch-sheet') ? document.getElementById('sch-sheet').value.trim() : null;
-        const platforms = 'linkedin';
-        const post_limit = parseInt(document.getElementById('sch-limit').value) || 2;
+      const name = resolveUniqueScheduleName(buildScheduleNameBase());
+      const expression = document.getElementById('sch-recurrence').value;
+      const job_type = document.getElementById('sch-job-type').value;
+      const workbookEl = document.getElementById('sch-workbook');
+      const sheetEl = document.getElementById('sch-sheet');
+      const workbook_path = job_type === 'post' && workbookEl ? (workbookEl.value || null) : null;
+      const sheet_name = job_type === 'post' && sheetEl ? (sheetEl.value || null) : null;
+      const platforms = 'linkedin';
+      const post_limit = parseInt(document.getElementById('sch-limit').value, 10) || 2;
       
       fetch('/api/schedules', {
         method: 'POST',
@@ -2726,8 +3493,7 @@
           showToast(data.error, 'error');
         } else {
           showToast('Schedule created successfully!');
-          document.getElementById('add-schedule-form').reset();
-          toggleJobTypeFields();
+          resetScheduleForm();
           loadSchedules();
         }
       })
