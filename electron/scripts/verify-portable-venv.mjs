@@ -8,23 +8,18 @@ const venvDir = path.resolve(__dirname, '..', 'runtime', 'venv');
 
 function pythonCandidates() {
   if (process.platform === 'win32') {
-    return ['python.exe', 'python3.exe'];
+    return [path.join(venvDir, 'python.exe'), path.join(venvDir, 'python3.exe')];
   }
-  return ['python3', 'python3.12', 'python'];
+  return [
+    path.join(venvDir, 'bin', 'python3'),
+    path.join(venvDir, 'bin', 'python3.12'),
+    path.join(venvDir, 'bin', 'python'),
+  ];
 }
 
-function binDir() {
-  return process.platform === 'win32'
-    ? path.join(venvDir, 'Scripts')
-    : path.join(venvDir, 'bin');
-}
-
-function resolveWithoutBrokenSymlink(targetPath) {
-  try {
-    const stat = fs.lstatSync(targetPath);
-    if (!stat.isSymbolicLink()) {
-      return targetPath;
-    }
+function resolvePythonEntrypoint(targetPath) {
+  const stat = fs.lstatSync(targetPath);
+  if (stat.isSymbolicLink()) {
     const linkTarget = fs.readlinkSync(targetPath);
     const resolved = path.isAbsolute(linkTarget)
       ? linkTarget
@@ -36,9 +31,8 @@ function resolveWithoutBrokenSymlink(targetPath) {
       throw new Error(`External symlink is not portable: ${targetPath} -> ${resolved}`);
     }
     return resolved;
-  } catch (error) {
-    throw new Error(`Invalid Python entrypoint ${targetPath}: ${error.message}`);
   }
+  return targetPath;
 }
 
 function runtimeEnv() {
@@ -54,34 +48,39 @@ function runtimeEnv() {
 
 function main() {
   if (!fs.existsSync(venvDir)) {
-    throw new Error(`Bundled venv missing at ${venvDir}`);
+    throw new Error(`Bundled Python runtime missing at ${venvDir}`);
   }
 
-  const candidates = pythonCandidates()
-    .map((name) => path.join(binDir(), name))
-    .filter((candidate) => fs.existsSync(candidate));
-
+  const candidates = pythonCandidates().filter((candidate) => fs.existsSync(candidate));
   if (!candidates.length) {
-    throw new Error(`No Python executable found under ${binDir()}`);
+    throw new Error(`No Python executable found under ${venvDir}`);
   }
 
-  const python = resolveWithoutBrokenSymlink(candidates[0]);
+  const python = resolvePythonEntrypoint(candidates[0]);
   const stat = fs.statSync(python);
   if (!stat.isFile()) {
     throw new Error(`Python entrypoint is not a regular file: ${python}`);
   }
 
-  const probe = spawnSync(python, ['-c', "import flask, playwright; print('ok')"], {
-    encoding: 'utf8',
-    env: runtimeEnv(),
-  });
+  const probe = spawnSync(
+    python,
+    ['-c', "import sys, flask, playwright; print(sys.executable); print('ok')"],
+    {
+      encoding: 'utf8',
+      env: runtimeEnv(),
+    },
+  );
   if (probe.status !== 0) {
     throw new Error(
       `Bundled Python failed self-test:\n${probe.stdout}\n${probe.stderr}`
     );
   }
 
-  console.log(`[verify-portable-venv] ok: ${python}`);
+  if (probe.stdout.includes('/opt/hostedtoolcache/')) {
+    throw new Error('Bundled Python still depends on CI-only hostedtoolcache paths');
+  }
+
+  console.log(`[verify-portable-venv] ok: ${python.trim()}`);
 }
 
 main();

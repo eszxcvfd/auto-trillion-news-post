@@ -10,6 +10,14 @@ const runtimeRoot = path.join(electronRoot, 'runtime');
 const venvDir = path.join(runtimeRoot, 'venv');
 const browsersDir = path.join(runtimeRoot, 'playwright-browsers');
 
+const STANDALONE_TAG = '20260602';
+const STANDALONE_VERSION = '3.12.13';
+
+const STANDALONE_ASSETS = {
+  linux: `cpython-${STANDALONE_VERSION}+${STANDALONE_TAG}-x86_64-unknown-linux-gnu-install_only.tar.gz`,
+  win32: `cpython-${STANDALONE_VERSION}+${STANDALONE_TAG}-x86_64-pc-windows-msvc-install_only.tar.gz`,
+};
+
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
     stdio: 'inherit',
@@ -22,60 +30,31 @@ function run(command, args, options = {}) {
 
 function pythonBin(name) {
   if (process.platform === 'win32') {
-    return path.join(venvDir, 'Scripts', `${name}.exe`);
+    return path.join(venvDir, `${name}.exe`);
   }
   return path.join(venvDir, 'bin', name);
 }
 
-function queryPythonLibDir(pythonLauncher) {
-  const probe = spawnSync(
-    pythonLauncher,
-    [
-      '-c',
-      'import pathlib, sysconfig; print(pathlib.Path(sysconfig.get_config_var("LIBDIR") or "").resolve())',
-    ],
-    { encoding: 'utf8' },
-  );
-  if (probe.status !== 0) {
-    throw new Error(`Failed to resolve Python LIBDIR:\n${probe.stderr}`);
+function standaloneArchiveUrl() {
+  const asset = STANDALONE_ASSETS[process.platform];
+  if (!asset) {
+    throw new Error(`Unsupported packaging platform: ${process.platform}`);
   }
-  return probe.stdout.trim();
+  return `https://github.com/astral-sh/python-build-standalone/releases/download/${STANDALONE_TAG}/${encodeURIComponent(asset)}`;
 }
 
-function bundleLinuxPythonLibs(pythonLauncher) {
-  if (process.platform !== 'linux') {
-    return;
-  }
-
-  const sourceLibDir = queryPythonLibDir(pythonLauncher);
-  const targetLibDir = path.join(venvDir, 'lib');
-  fs.mkdirSync(targetLibDir, { recursive: true });
-
-  let copied = 0;
-  for (const entry of fs.readdirSync(sourceLibDir)) {
-    if (!/^libpython3\.\d+\.so(?:\.\d+\.\d+)?$/.test(entry)) {
-      continue;
-    }
-    fs.copyFileSync(path.join(sourceLibDir, entry), path.join(targetLibDir, entry));
-    copied += 1;
-    console.log(`[prepare-runtime] bundled ${entry}`);
-  }
-
-  if (!copied) {
-    throw new Error(`No libpython shared libraries found in ${sourceLibDir}`);
-  }
+function downloadStandalonePython(archivePath) {
+  const url = standaloneArchiveUrl();
+  console.log(`[prepare-runtime] downloading ${url}`);
+  run('curl', ['-fL', url, '-o', archivePath]);
 }
 
-function main() {
-  fs.rmSync(runtimeRoot, { recursive: true, force: true });
-  fs.mkdirSync(browsersDir, { recursive: true });
+function extractStandalonePython(archivePath) {
+  fs.mkdirSync(venvDir, { recursive: true });
+  run('tar', ['-xzf', archivePath, '-C', venvDir, '--strip-components=1', 'python']);
+}
 
-  const pythonLauncher = process.env.PYTHON || (process.platform === 'win32' ? 'python' : 'python3');
-  // --copies embeds real Python binaries instead of CI-only symlinks.
-  run(pythonLauncher, ['-m', 'venv', venvDir, '--copies']);
-  bundleLinuxPythonLibs(pythonLauncher);
-
-  const python = pythonBin('python');
+function installPythonDependencies(python) {
   run(python, ['-m', 'pip', 'install', '--upgrade', 'pip']);
   run(python, ['-m', 'pip', 'install', '-r', path.join(repoRoot, 'requirements.txt')]);
   run(python, ['-m', 'playwright', 'install', 'chromium'], {
@@ -84,10 +63,31 @@ function main() {
       PLAYWRIGHT_BROWSERS_PATH: browsersDir,
     },
   });
+}
 
+function main() {
+  fs.rmSync(runtimeRoot, { recursive: true, force: true });
+  fs.mkdirSync(browsersDir, { recursive: true });
+
+  const archivePath = path.join(runtimeRoot, 'python-standalone.tar.gz');
+  fs.mkdirSync(runtimeRoot, { recursive: true });
+
+  downloadStandalonePython(archivePath);
+  extractStandalonePython(archivePath);
+  fs.rmSync(archivePath, { force: true });
+
+  const python = pythonBin('python3');
+  if (!fs.existsSync(python) && process.platform === 'win32') {
+    throw new Error(`Standalone Python missing at ${python}`);
+  }
+  if (!fs.existsSync(python) && process.platform !== 'win32') {
+    throw new Error(`Standalone Python missing at ${python}`);
+  }
+
+  installPythonDependencies(python);
   run(process.execPath, [path.join(__dirname, 'verify-portable-venv.mjs')]);
 
-  console.log(`[prepare-runtime] venv: ${venvDir}`);
+  console.log(`[prepare-runtime] standalone python: ${python}`);
   console.log(`[prepare-runtime] browsers: ${browsersDir}`);
 }
 

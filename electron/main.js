@@ -33,37 +33,45 @@ function userDataRoot() {
 }
 
 function resolvePackagedPython() {
-  const binDir = process.platform === 'win32'
-    ? path.join(process.resourcesPath, 'python-venv', 'Scripts')
-    : path.join(process.resourcesPath, 'python-venv', 'bin');
+  const roots = process.platform === 'win32'
+    ? [path.join(process.resourcesPath, 'python-venv')]
+    : [
+        path.join(process.resourcesPath, 'python-venv', 'bin'),
+        path.join(process.resourcesPath, 'python-venv'),
+      ];
   const names = process.platform === 'win32'
     ? ['python.exe', 'python3.exe']
     : ['python3', 'python3.12', 'python'];
 
-  for (const name of names) {
-    const candidate = path.join(binDir, name);
-    if (!fs.existsSync(candidate)) {
-      continue;
-    }
-    try {
-      const stat = fs.lstatSync(candidate);
-      if (stat.isSymbolicLink()) {
-        const target = fs.readlinkSync(candidate);
-        const resolved = path.isAbsolute(target)
-          ? target
-          : path.resolve(path.dirname(candidate), target);
-        if (fs.existsSync(resolved)) {
-          return candidate;
-        }
+  for (const root of roots) {
+    for (const name of names) {
+      const candidate = path.join(root, name);
+      if (!fs.existsSync(candidate)) {
         continue;
       }
-      return candidate;
-    } catch (error) {
-      log.warn('Skipping invalid bundled Python candidate', candidate, error);
+      try {
+        const stat = fs.lstatSync(candidate);
+        if (stat.isSymbolicLink()) {
+          const target = fs.readlinkSync(candidate);
+          const resolved = path.isAbsolute(target)
+            ? target
+            : path.resolve(path.dirname(candidate), target);
+          if (fs.existsSync(resolved)) {
+            return candidate;
+          }
+          continue;
+        }
+        return candidate;
+      } catch (error) {
+        log.warn('Skipping invalid bundled Python candidate', candidate, error);
+      }
     }
   }
 
-  return path.join(binDir, process.platform === 'win32' ? 'python.exe' : 'python3');
+  const fallbackRoot = process.platform === 'win32'
+    ? path.join(process.resourcesPath, 'python-venv')
+    : path.join(process.resourcesPath, 'python-venv', 'bin');
+  return path.join(fallbackRoot, process.platform === 'win32' ? 'python.exe' : 'python3');
 }
 
 function pythonExecutable() {
