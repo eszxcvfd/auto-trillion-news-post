@@ -1,6 +1,6 @@
 {
   "name": "trillion-news-post-desktop",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "Desktop operator surface for Trillion News Auto Post System",
   "main": "main.js",
   "author": "Trillion News",
@@ -59,7 +59,8 @@
     ],
     "linux": {
       "executableArgs": [
-        "--no-sandbox"
+        "--no-sandbox",
+        "--disable-setuid-sandbox"
       ],
       "target": [
         "AppImage",
@@ -68,6 +69,9 @@
       "category": "Office",
       "maintainer": "eszxcvfd@gmail.com",
       "artifactName": "Trillion-News-Post-${version}-linux-${arch}.${ext}"
+    },
+    "deb": {
+      "afterInstall": "build/linux-after-install.sh"
     },
     "win": {
       "target": [
