@@ -5,6 +5,8 @@ from src.posting_core import (
     parse_link_post_document,
     serialize_link_post_document,
     evaluate_row_eligibility,
+    list_eligible_platforms,
+    resolve_manual_post_target,
     build_posting_plan
 )
 
@@ -130,6 +132,89 @@ class TestPostingCore(unittest.TestCase):
         # The other 2 should be logged in skipped_summary as limit reached
         self.assertEqual(len(plan.skipped_summary), 2)
         self.assertTrue(any("skipped for platform 'LinkedIn' because maximum limit of 2 was reached" in s for s in plan.skipped_summary))
+
+    def test_list_eligible_platforms(self):
+        row = BusinessWorkbookRow(
+            sheet_name="Payment",
+            row_idx=2,
+            id=1,
+            title="Test Title",
+            linkedin_draft="LinkedIn content",
+            facebook_draft="Facebook content",
+            x_draft="X content",
+            link_post_raw=(
+                "LinkedIn: https://linkedin.com/post/123\n"
+                "Facebook: [error] retry me\n"
+                "X: [skip] not now"
+            ),
+        )
+
+        eligible = list_eligible_platforms(row)
+        self.assertEqual([p for p, _ in eligible], ["facebook"])
+
+    def test_list_eligible_platforms_manual_retry_allows_skip(self):
+        row = BusinessWorkbookRow(
+            sheet_name="Payment",
+            row_idx=2,
+            id=1,
+            title="Test Title",
+            facebook_draft="Facebook content",
+            x_draft="X content",
+            link_post_raw=(
+                "Facebook: [skip] skipped by operator\n"
+                "X: [skip] skipped by operator"
+            ),
+        )
+
+        eligible = list_eligible_platforms(row, manual_retry=True)
+        self.assertEqual([p for p, _ in eligible], ["facebook", "x"])
+
+    def test_resolve_manual_post_target_single_eligible(self):
+        row = BusinessWorkbookRow(
+            sheet_name="Payment",
+            row_idx=2,
+            id=1,
+            title="Test Title",
+            linkedin_draft="LinkedIn content",
+            link_post_raw="LinkedIn: [pending]",
+        )
+
+        platform_key, draft = resolve_manual_post_target(row)
+        self.assertEqual(platform_key, "linkedin")
+        self.assertEqual(draft, "LinkedIn content")
+
+    def test_resolve_manual_post_target_requires_selection(self):
+        row = BusinessWorkbookRow(
+            sheet_name="Payment",
+            row_idx=2,
+            id=1,
+            title="Test Title",
+            linkedin_draft="LinkedIn content",
+            facebook_draft="Facebook content",
+        )
+
+        with self.assertRaises(ValueError) as context:
+            resolve_manual_post_target(row)
+        self.assertIn("Multiple eligible platforms", str(context.exception))
+
+    def test_resolve_manual_post_target_rejects_ineligible_choice(self):
+        row = BusinessWorkbookRow(
+            sheet_name="Payment",
+            row_idx=2,
+            id=1,
+            title="Test Title",
+            linkedin_draft="LinkedIn content",
+            facebook_draft="Facebook content",
+            link_post_raw="LinkedIn: https://linkedin.com/post/123",
+        )
+
+        with self.assertRaises(ValueError) as context:
+            resolve_manual_post_target(row, "linkedin")
+        self.assertIn("already posted", str(context.exception))
+
+        platform_key, draft = resolve_manual_post_target(row, "facebook")
+        self.assertEqual(platform_key, "facebook")
+        self.assertEqual(draft, "Facebook content")
 
     def test_build_posting_plan_mixed_eligibility(self):
         rows = [

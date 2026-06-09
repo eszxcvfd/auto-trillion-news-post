@@ -415,8 +415,6 @@ def execute_post(item_id: int, platform: str = None, sheet: str = None):
     except ImportError:
         print("[ERROR] openpyxl is not installed. Please run pip install -r requirements.txt to install it.")
         sys.exit(1)
-        
-    platform = platform or config.default_platform
     
     filepath = config.excel_file
     if not os.path.exists(filepath):
@@ -431,7 +429,12 @@ def execute_post(item_id: int, platform: str = None, sheet: str = None):
         
     if wb_type == "business":
         from src.business_workbook import ingest_business_workbook
-        from src.posting_core import canonicalize_platform, PLATFORM_ATTRS
+        from src.posting_core import (
+            canonicalize_platform,
+            list_eligible_platforms,
+            resolve_manual_post_target,
+            PLATFORM_CANONICAL,
+        )
         from src.writeback import write_post_result
         from src.assisted_posting import run_assisted_posting
         
@@ -466,21 +469,49 @@ def execute_post(item_id: int, platform: str = None, sheet: str = None):
             except (EOFError, ValueError, IndexError, KeyboardInterrupt):
                 print(f"[INFO] Using default match in sheet '{row.sheet_name}'.")
             
-        try:
-            platform_key = canonicalize_platform(platform)
-        except ValueError as e:
-            print(f"[ERROR] {e}")
+        eligible = list_eligible_platforms(row, config=config, workbook_path=filepath)
+        if not eligible:
+            print(
+                f"[ERROR] No eligible platforms to post for row ID {item_id} "
+                f"in sheet '{row.sheet_name}'. Ensure draft content exists and "
+                "the platform is not already posted or explicitly skipped."
+            )
             sys.exit(1)
-            
-        attr_name = PLATFORM_ATTRS.get(platform_key)
-        if not attr_name:
-            print(f"[ERROR] No attribute mapping for platform '{platform}'")
-            sys.exit(1)
-            
-        draft_content = getattr(row, attr_name, None)
-        if not draft_content:
-            print(f"[ERROR] No draft content for platform '{platform}' found in sheet '{row.sheet_name}' at Row {row.row_idx} (ID: {item_id}). Please run generate first.")
-            sys.exit(1)
+
+        platform_key = None
+        draft_content = None
+        if platform:
+            try:
+                platform_key, draft_content = resolve_manual_post_target(
+                    row,
+                    platform,
+                    config=config,
+                    workbook_path=filepath,
+                )
+            except ValueError as e:
+                print(f"[ERROR] {e}")
+                sys.exit(1)
+        elif len(eligible) == 1:
+            platform_key, draft_content = eligible[0]
+        else:
+            print(f"[INFO] Multiple eligible platforms found for row ID {item_id}:")
+            for idx, (p_key, _) in enumerate(eligible, 1):
+                print(f"  {idx}. {PLATFORM_CANONICAL[p_key]}")
+            try:
+                choice = input(
+                    f"Select platform to post (1-{len(eligible)}, default 1): "
+                ).strip()
+                choice_idx = int(choice) - 1 if choice else 0
+                if not (0 <= choice_idx < len(eligible)):
+                    print("[ERROR] Invalid platform selection.")
+                    sys.exit(1)
+                platform_key, draft_content = eligible[choice_idx]
+                print(f"[INFO] Selected platform '{PLATFORM_CANONICAL[platform_key]}'.")
+            except (EOFError, ValueError, KeyboardInterrupt):
+                print("[ERROR] Platform selection is required when multiple eligible platforms exist.")
+                sys.exit(1)
+
+        platform = platform_key
             
         # Resolve draft_content if it is stored as a file path
         if draft_content and isinstance(draft_content, str):
@@ -507,7 +538,12 @@ def execute_post(item_id: int, platform: str = None, sheet: str = None):
         )
         
         print(f"[INFO] Launching assisted posting for ID {item_id} on '{platform}' [Sheet: {row.sheet_name}, Row: {row.row_idx}]: '{item.title}'")
-        success = run_assisted_posting(item, config, post_content=draft_content)
+        success = run_assisted_posting(
+            item,
+            config,
+            post_content=draft_content,
+            workbook_path=filepath,
+        )
         
         if success:
             url_input = getattr(item, "post_url", "").strip()
@@ -544,6 +580,7 @@ def execute_post(item_id: int, platform: str = None, sheet: str = None):
                     
     else:
         # Legacy Contract A flow
+        platform = platform or config.default_platform
         try:
             wb = openpyxl.load_workbook(filepath)
             ws = wb.active
@@ -653,7 +690,14 @@ def execute_inspect_workbook(
         # Generate the plan
         p_list = [p.strip() for p in platforms_str.split(",") if p.strip()]
         try:
-            plan = build_posting_plan(rows, p_list, limit_per_platform=limit)
+            config = AppConfig()
+            plan = build_posting_plan(
+                rows,
+                p_list,
+                limit_per_platform=limit,
+                config=config,
+                workbook_path=filepath,
+            )
         except Exception as e:
             print(f"[ERROR] Failed to build posting plan: {e}")
             sys.exit(1)

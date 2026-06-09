@@ -1,5 +1,5 @@
 import re
-from typing import List, Dict, Tuple, Optional
+from typing import List, Dict, Tuple, Optional, TYPE_CHECKING
 from src.models import (
     BusinessWorkbookRow,
     PlatformPostState,
@@ -7,6 +7,9 @@ from src.models import (
     PostingCandidate,
     PostingPlan
 )
+
+if TYPE_CHECKING:
+    from src.config import AppConfig
 
 # Canonical mapping of platform names (lowercase -> display name)
 PLATFORM_CANONICAL = {
@@ -21,6 +24,12 @@ PLATFORM_CANONICAL = {
     "tiktok": "TikTok",
     "youtube": "YouTube"
 }
+
+# Stable ordering for manual platform selection prompts
+PLATFORM_ORDER = [
+    "linkedin", "facebook", "x", "instagram",
+    "pinterest", "threads", "tiktok", "youtube"
+]
 
 # Inverse lookup for attribute names
 PLATFORM_ATTRS = {
@@ -138,7 +147,13 @@ def serialize_link_post_document(doc: LinkPostDocument) -> str:
     return "\n".join(lines)
 
 
-def evaluate_row_eligibility(row: BusinessWorkbookRow, platform: str) -> Tuple[str, Optional[str]]:
+def evaluate_row_eligibility(
+    row: BusinessWorkbookRow,
+    platform: str,
+    config: Optional["AppConfig"] = None,
+    workbook_path: Optional[str] = None,
+    manual_retry: bool = False,
+) -> Tuple[str, Optional[str]]:
     """
     Evaluate whether a row is eligible to be posted on a given platform.
     
@@ -149,6 +164,9 @@ def evaluate_row_eligibility(row: BusinessWorkbookRow, platform: str) -> Tuple[s
       - 'skipped_no_content': Platform draft is missing/whitespace/'.'
       - 'skipped_already_posted': Platform has already been successfully posted.
       - 'skipped_explicit_skip': Platform is marked as [skip] in Link Post.
+      
+    When manual_retry is True (Web UI manual post), operator [skip] states are
+    treated as retryable so a skipped assisted-post attempt can be launched again.
     """
     try:
         platform_key = canonicalize_platform(platform)
@@ -174,15 +192,181 @@ def evaluate_row_eligibility(row: BusinessWorkbookRow, platform: str) -> Tuple[s
             if state.status_type == "success":
                 return "skipped_already_posted", f"Already posted ({state.raw_value})"
             elif state.status_type == "skip":
-                return "skipped_explicit_skip", f"Explicitly skipped ({state.raw_value})"
+                if manual_retry:
+                    pass
+                else:
+                    return "skipped_explicit_skip", f"Explicitly skipped ({state.raw_value})"
+            elif state.status_type == "retryable":
+                pass
+
+    if config is not None:
+        from src.platform_capabilities import check_platform_media_requirements
+
+        media_status, media_reason = check_platform_media_requirements(
+            platform_key,
+            row.image_link,
+            config=config,
+            workbook_path=workbook_path,
+        )
+        if media_status != "ok":
+            return media_status, media_reason
                 
     return "eligible", None
 
 
+def list_row_post_blockers(
+    row: BusinessWorkbookRow,
+    config: Optional["AppConfig"] = None,
+    workbook_path: Optional[str] = None,
+    manual_retry: bool = False,
+) -> List[Dict[str, str]]:
+    """Return operator-facing blockers for platforms with draft or Link Post state."""
+    link_states: Dict[str, PlatformPostState] = {}
+    if row.link_post_raw:
+        link_states = parse_link_post_document(row.link_post_raw).states
+
+    blockers: List[Dict[str, str]] = []
+    for platform_key in PLATFORM_ORDER:
+        attr_name = PLATFORM_ATTRS[platform_key]
+        draft_val = getattr(row, attr_name, None)
+        has_link_state = platform_key in link_states
+        if not draft_val and not has_link_state:
+            continue
+
+        status, reason = evaluate_row_eligibility(
+            row,
+            platform_key,
+            config=config,
+            workbook_path=workbook_path,
+            manual_retry=manual_retry,
+        )
+        if status == "eligible":
+            continue
+        blockers.append({
+            "platform": platform_key,
+            "label": PLATFORM_CANONICAL[platform_key],
+            "status": status,
+            "reason": reason or "Not eligible",
+        })
+    return blockers
+
+
+def list_eligible_platforms(
+    row: BusinessWorkbookRow,
+    config: Optional["AppConfig"] = None,
+    workbook_path: Optional[str] = None,
+    manual_retry: bool = False,
+) -> List[Tuple[str, str]]:
+    """
+    Return eligible (platform_key, draft_content) pairs for a workbook row.
+    Platforms are returned in canonical display order.
+    """
+    eligible: List[Tuple[str, str]] = []
+    for platform_key in PLATFORM_ORDER:
+        status, _ = evaluate_row_eligibility(
+            row,
+            platform_key,
+            config=config,
+            workbook_path=workbook_path,
+            manual_retry=manual_retry,
+        )
+        if status != "eligible":
+            continue
+        attr_name = PLATFORM_ATTRS[platform_key]
+        draft_val = getattr(row, attr_name)
+        eligible.append((platform_key, draft_val))
+    return eligible
+
+
+def resolve_manual_post_target(
+    row: BusinessWorkbookRow,
+    platform: Optional[str] = None,
+    config: Optional["AppConfig"] = None,
+    workbook_path: Optional[str] = None,
+) -> Tuple[str, str]:
+    """
+    Resolve one manual post target as a single row x platform pair.
+
+    Returns (platform_key, draft_content).
+    Raises ValueError with operator-facing feedback when the target cannot be resolved.
+    """
+    eligible = list_eligible_platforms(
+        row,
+        config=config,
+        workbook_path=workbook_path,
+        manual_retry=True,
+    )
+    if not eligible:
+        blockers = list_row_post_blockers(
+            row,
+            config=config,
+            workbook_path=workbook_path,
+            manual_retry=True,
+        )
+        if blockers:
+            details = "; ".join(
+                f"{b['label']}: {b['reason']}" for b in blockers[:4]
+            )
+            raise ValueError(
+                "No eligible platforms to post for this row. "
+                f"Blocked targets — {details}"
+            )
+        raise ValueError(
+            "No eligible platforms to post for this row. "
+            "Generate drafts for this row first, then retry posting."
+        )
+
+    if platform is None:
+        if len(eligible) == 1:
+            return eligible[0]
+        labels = [PLATFORM_CANONICAL[p] for p, _ in eligible]
+        raise ValueError(
+            f"Multiple eligible platforms found ({', '.join(labels)}). "
+            "Specify one platform target."
+        )
+
+    try:
+        platform_key = canonicalize_platform(platform)
+    except ValueError as e:
+        raise ValueError(str(e)) from e
+
+    for p_key, draft_val in eligible:
+        if p_key == platform_key:
+            return p_key, draft_val
+
+    status, reason = evaluate_row_eligibility(
+        row,
+        platform_key,
+        config=config,
+        workbook_path=workbook_path,
+        manual_retry=True,
+    )
+    display_name = PLATFORM_CANONICAL[platform_key]
+    if status == "skipped_no_content":
+        raise ValueError(
+            f"No draft content for platform '{display_name}' on this row. "
+            "Please run generate first."
+        )
+    if status == "skipped_already_posted":
+        raise ValueError(
+            f"Platform '{display_name}' is already posted on this row ({reason})."
+        )
+    if status == "skipped_explicit_skip":
+        raise ValueError(
+            f"Platform '{display_name}' is explicitly skipped on this row ({reason})."
+        )
+    raise ValueError(
+        f"Platform '{display_name}' is not eligible for posting on this row"
+        + (f": {reason}" if reason else ".")
+    )
+
+
 def build_posting_plan(
-    rows: List[BusinessWorkbookRow], 
-    platforms: List[str], 
-    limit_per_platform: int = 2
+    rows: List[BusinessWorkbookRow],
+    platforms: List[str],
+    limit_per_platform: int = 2,
+    config: Optional["AppConfig"] = None,
+    workbook_path: Optional[str] = None,
 ) -> PostingPlan:
     """
     Build a PostingPlan for the run.
@@ -211,7 +395,12 @@ def build_posting_plan(
             # Run eligibility check
             # Wrap in try-except to catch Link Post parse errors with row/sheet context
             try:
-                status, reason = evaluate_row_eligibility(row, p_key)
+                status, reason = evaluate_row_eligibility(
+                    row,
+                    p_key,
+                    config=config,
+                    workbook_path=workbook_path,
+                )
             except Exception as e:
                 # Add row context to the parse error
                 err_msg = f"Sheet '{row.sheet_name}', Row {row.row_idx} (ID: {row.id}) Link Post parse error: {e}"
