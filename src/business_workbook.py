@@ -239,6 +239,8 @@ def ingest_business_workbook(filepath: str, sheet_scope: Optional[List[str]] = N
                                 resolved_content = load_draft_from_cell(cell_str, filepath)
                                 if resolved_content is not None:
                                     row_data[attr_name] = resolved_content
+                                    if attr_name == "linkedin_draft" and looks_like_file_reference(cell_str):
+                                        row_data["linkedin_draft_ref"] = cell_str
                                 elif looks_like_file_reference(cell_str):
                                     platform_key = attr_name.replace("_draft", "")
                                     broken_refs = row_data.get("broken_draft_refs") or {}
@@ -276,6 +278,7 @@ def ingest_business_workbook(filepath: str, sheet_scope: Optional[List[str]] = N
                     title=title_val,
                     image_link=row_data.get("image_link"),
                     linkedin_draft=row_data.get("linkedin_draft"),
+                    linkedin_draft_ref=row_data.get("linkedin_draft_ref"),
                     facebook_draft=row_data.get("facebook_draft"),
                     x_draft=row_data.get("x_draft"),
                     instagram_draft=row_data.get("instagram_draft"),
@@ -1001,3 +1004,166 @@ def repair_broken_draft_references(config) -> List[str]:
         wb.close()
 
     return actions
+
+
+def _worksheet_col_map(ws) -> Dict[str, int]:
+    header_row = []
+    for row in ws.iter_rows(max_row=1, values_only=True):
+        header_row = row
+        break
+    col_map: Dict[str, int] = {}
+    for idx, val in enumerate(header_row):
+        norm = normalize_header(val)
+        if norm:
+            col_map[norm] = idx + 1
+    return col_map
+
+
+def _require_business_sheet(ws, sheet_name: str) -> Dict[str, int]:
+    col_map = _worksheet_col_map(ws)
+    if "trillion $ news title" not in col_map:
+        raise ValueError(f"Sheet '{sheet_name}' is not a business category sheet")
+    return col_map
+
+
+def delete_workbook_row(config, sheet_name: str, row_idx: int) -> Dict[str, object]:
+    """Delete one workbook row after backup; compact blank rows in the sheet."""
+    filepath = config.excel_file
+    if not os.path.exists(filepath):
+        raise FileNotFoundError(f"Workbook file '{filepath}' does not exist.")
+
+    from src.writeback import is_workbook_locked, create_workbook_backup
+
+    if is_workbook_locked(filepath):
+        raise PermissionError(
+            f"Workbook '{filepath}' is currently locked/open in another application."
+        )
+
+    if not sheet_name or not str(sheet_name).strip():
+        raise ValueError("sheet_name is required")
+
+    try:
+        row_idx = int(row_idx)
+    except (TypeError, ValueError):
+        raise ValueError("row_idx must be a positive integer")
+    if row_idx < 2:
+        raise ValueError("row_idx must be an Excel data row (>= 2)")
+
+    if config.backup_enabled:
+        try:
+            create_workbook_backup(filepath)
+        except Exception as e:
+            print(f"[WARNING] Failed to create workbook backup: {e}")
+
+    wb = openpyxl.load_workbook(filepath)
+    try:
+        if sheet_name not in wb.sheetnames:
+            raise ValueError(f"Sheet '{sheet_name}' not found in workbook")
+
+        ws = wb[sheet_name]
+        col_map = _require_business_sheet(ws, sheet_name)
+        title_col = col_map["trillion $ news title"]
+
+        if row_idx > ws.max_row:
+            raise ValueError(
+                f"Row {row_idx} does not exist in sheet '{sheet_name}'"
+            )
+
+        id_col = col_map.get("#", 1)
+        row_id = ws.cell(row=row_idx, column=id_col).value
+        title = normalize_cell_content(ws.cell(row=row_idx, column=title_col).value)
+
+        ws.delete_rows(row_idx, 1)
+        compacted = _compact_sheet_empty_rows(ws, title_col)
+        wb.save(filepath)
+
+        return {
+            "sheet_name": sheet_name,
+            "row_idx": row_idx,
+            "row_id": row_id,
+            "title": title,
+            "compacted_blank_rows": compacted,
+        }
+    finally:
+        wb.close()
+
+
+def regenerate_linkedin_draft_for_row(
+    config,
+    sheet_name: str,
+    row_idx: int,
+) -> Dict[str, object]:
+    """Clear the LinkedIn draft cell for one row and regenerate via shared pipeline."""
+    filepath = config.excel_file
+    if not os.path.exists(filepath):
+        raise FileNotFoundError(f"Workbook file '{filepath}' does not exist.")
+
+    from src.writeback import is_workbook_locked, create_workbook_backup
+
+    if is_workbook_locked(filepath):
+        raise PermissionError(
+            f"Workbook '{filepath}' is currently locked/open in another application."
+        )
+
+    if not sheet_name or not str(sheet_name).strip():
+        raise ValueError("sheet_name is required")
+
+    try:
+        row_idx = int(row_idx)
+    except (TypeError, ValueError):
+        raise ValueError("row_idx must be a positive integer")
+    if row_idx < 2:
+        raise ValueError("row_idx must be an Excel data row (>= 2)")
+
+    if config.backup_enabled:
+        try:
+            create_workbook_backup(filepath)
+        except Exception as e:
+            print(f"[WARNING] Failed to create workbook backup: {e}")
+
+    wb = openpyxl.load_workbook(filepath)
+    row_id = None
+    title = None
+    try:
+        if sheet_name not in wb.sheetnames:
+            raise ValueError(f"Sheet '{sheet_name}' not found in workbook")
+
+        ws = wb[sheet_name]
+        col_map = _require_business_sheet(ws, sheet_name)
+        title_col = col_map["trillion $ news title"]
+        linkedin_col = col_map.get("linkedin")
+
+        if row_idx > ws.max_row:
+            raise ValueError(
+                f"Row {row_idx} does not exist in sheet '{sheet_name}'"
+            )
+
+        title = normalize_cell_content(ws.cell(row=row_idx, column=title_col).value)
+        if not title:
+            raise ValueError(f"Row {row_idx} in sheet '{sheet_name}' has no article title")
+
+        id_col = col_map.get("#", 1)
+        row_id = parse_row_id(ws.cell(row=row_idx, column=id_col).value)
+        if row_id is None:
+            row_id = row_idx
+
+        if linkedin_col:
+            ws.cell(row=row_idx, column=linkedin_col).value = None
+
+        wb.save(filepath)
+    finally:
+        wb.close()
+
+    generate_drafts_for_business_excel(
+        config,
+        platform_option=PROJECT_DEFAULT_PLATFORM,
+        target_ids=[(sheet_name, row_id)],
+    )
+
+    return {
+        "sheet_name": sheet_name,
+        "row_idx": row_idx,
+        "row_id": row_id,
+        "title": title,
+        "platform": PROJECT_DEFAULT_PLATFORM,
+    }

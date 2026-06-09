@@ -30,6 +30,7 @@ class BusinessWorkbookRow:
     title: Optional[str] = None
     image_link: Optional[str] = None
     linkedin_draft: Optional[str] = None
+    linkedin_draft_ref: Optional[str] = None
     facebook_draft: Optional[str] = None
     x_draft: Optional[str] = None
     instagram_draft: Optional[str] = None
