@@ -17,7 +17,7 @@ Done when:
 - baseline implemented behavior is clearly separated from target v2 behavior
 - current tests still prove the baseline
 
-## Release B1 — Business Workbook + Shared Posting Core
+## Release B1 — Business Workbook + Platform Posting Foundation
 
 Scope:
 
@@ -27,7 +27,8 @@ Scope:
 - parse and write `Link Post`
 - add selective posting
 - add image resolution
-- support LinkedIn, Facebook, and X through the shared posting core
+- support LinkedIn, Facebook, and X through platform-owned posting workflows
+  behind shared eligibility and write-back orchestration
 
 Done when:
 

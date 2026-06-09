@@ -63,7 +63,7 @@ Python is the application runtime for:
 - harvesting pipeline logic
 - workbook parsing and write-back
 - AI integration with Gemini
-- posting core and platform adapters
+- shared posting orchestration and platform-isolated posting workflows
 - future web backend if a web surface is introduced
 - future scheduling and local job execution if scheduling is introduced
 
@@ -352,8 +352,32 @@ Current brownfield mapping:
 - `src/searcher.py`, `src/ai_writer.py`, `src/excel_store.py`,
   `src/post_writer.py`, and `src/assisted_posting.py` are early infrastructure
   and application hybrids
+- `src/posting_core.py` owns shared eligibility, `Link Post` parsing, and
+  posting-plan generation
+- `src/platform_workflows/` owns platform-isolated browser workflows and the
+  dispatch registry used by CLI, Web UI, and scheduler posting surfaces
+- `src/platform_posting.py` is a thin facade for asset preparation and backward
+  compatibility exports
 - future refactor should extract responsibilities gradually, not by a blind
   rewrite
+
+## Platform-Isolated Posting Workflows
+
+Pipeline B posting now separates shared orchestration from platform-owned
+automation:
+
+```text
+workbook row + platform target
+  -> posting_core eligibility and plan generation
+  -> platform_workflows registry dispatch
+  -> platform-owned browser workflow
+  -> shared writeback into Link Post
+  -> scheduler run history with workflow_id attribution
+```
+
+Shared responsibilities stay in `posting_core`, workbook adapters, and
+write-back. Platform workflows own browser steps, session checks, media
+handling, composer preparation, and provider-specific failure mapping.
 
 ## Dependency Rule
 
@@ -374,8 +398,9 @@ Brownfield additions:
 - platform-specific automation must not own workbook parsing or business row
   selection
 - workbook adapters must not own browser interaction logic
-- future UI and scheduler layers must call the same posting core, not fork
-  separate business logic
+- future UI and scheduler layers must call the same shared posting orchestration,
+  then dispatch into platform-owned workflows instead of one tightly coupled
+  automation engine
 
 ## Parse-First Boundary Rule
 

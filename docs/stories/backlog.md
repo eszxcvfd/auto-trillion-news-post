@@ -18,6 +18,7 @@ candidate implementation slices.
 | US-014 | B2 image-first platform posting (Instagram/Pinterest/Threads) | implemented |
 | US-015 | B3 best-effort TikTok and YouTube posting | implemented |
 | US-016 | B1 Facebook and X assisted posting adapters | implemented |
+| US-017 | Platform-isolated auto posting workflows | implemented |
 
 ## Release Mapping
 

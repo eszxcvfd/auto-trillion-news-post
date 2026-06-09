@@ -36,12 +36,16 @@ Repeatable fixtures should include:
 
 ## Commands
 
-Add commands after implementation slices exist.
-
 ```text
 .venv/bin/python -m unittest discover tests
 ```
 
 ## Acceptance Evidence
 
-Add results after implementation exists.
+- Added `src/platform_workflows/` with registry dispatch, LinkedIn and Facebook
+  owned workflows, and profile-based workflows for the remaining supported
+  platforms.
+- `src/platform_posting.py` now acts as a compatibility facade over the registry.
+- Scheduler `run_details` stores `workflow_id` for posting outcomes.
+- `.venv/bin/python -m unittest discover tests` passed with 140 tests on
+  2026-06-09, including new `tests/test_platform_workflows.py`.
