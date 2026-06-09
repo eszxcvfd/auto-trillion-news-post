@@ -41,6 +41,17 @@ function resolveWithoutBrokenSymlink(targetPath) {
   }
 }
 
+function runtimeEnv() {
+  const env = { ...process.env };
+  if (process.platform === 'linux') {
+    const libDir = path.join(venvDir, 'lib');
+    if (fs.existsSync(libDir)) {
+      env.LD_LIBRARY_PATH = [libDir, env.LD_LIBRARY_PATH].filter(Boolean).join(path.delimiter);
+    }
+  }
+  return env;
+}
+
 function main() {
   if (!fs.existsSync(venvDir)) {
     throw new Error(`Bundled venv missing at ${venvDir}`);
@@ -62,6 +73,7 @@ function main() {
 
   const probe = spawnSync(python, ['-c', "import flask, playwright; print('ok')"], {
     encoding: 'utf8',
+    env: runtimeEnv(),
   });
   if (probe.status !== 0) {
     throw new Error(

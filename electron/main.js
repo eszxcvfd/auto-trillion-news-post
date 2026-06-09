@@ -132,6 +132,13 @@ function ensureOperatorEnv() {
     env.PLAYWRIGHT_BROWSERS_PATH = browsersPath;
   }
 
+  if (isPackaged() && process.platform === 'linux') {
+    const libDir = path.join(process.resourcesPath, 'python-venv', 'lib');
+    if (fs.existsSync(libDir)) {
+      env.LD_LIBRARY_PATH = [libDir, env.LD_LIBRARY_PATH].filter(Boolean).join(path.delimiter);
+    }
+  }
+
   return { env, envPath, outputDir };
 }
 

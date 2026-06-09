@@ -27,6 +27,45 @@ function pythonBin(name) {
   return path.join(venvDir, 'bin', name);
 }
 
+function queryPythonLibDir(pythonLauncher) {
+  const probe = spawnSync(
+    pythonLauncher,
+    [
+      '-c',
+      'import pathlib, sysconfig; print(pathlib.Path(sysconfig.get_config_var("LIBDIR") or "").resolve())',
+    ],
+    { encoding: 'utf8' },
+  );
+  if (probe.status !== 0) {
+    throw new Error(`Failed to resolve Python LIBDIR:\n${probe.stderr}`);
+  }
+  return probe.stdout.trim();
+}
+
+function bundleLinuxPythonLibs(pythonLauncher) {
+  if (process.platform !== 'linux') {
+    return;
+  }
+
+  const sourceLibDir = queryPythonLibDir(pythonLauncher);
+  const targetLibDir = path.join(venvDir, 'lib');
+  fs.mkdirSync(targetLibDir, { recursive: true });
+
+  let copied = 0;
+  for (const entry of fs.readdirSync(sourceLibDir)) {
+    if (!/^libpython3\.\d+\.so(?:\.\d+\.\d+)?$/.test(entry)) {
+      continue;
+    }
+    fs.copyFileSync(path.join(sourceLibDir, entry), path.join(targetLibDir, entry));
+    copied += 1;
+    console.log(`[prepare-runtime] bundled ${entry}`);
+  }
+
+  if (!copied) {
+    throw new Error(`No libpython shared libraries found in ${sourceLibDir}`);
+  }
+}
+
 function main() {
   fs.rmSync(runtimeRoot, { recursive: true, force: true });
   fs.mkdirSync(browsersDir, { recursive: true });
@@ -34,6 +73,7 @@ function main() {
   const pythonLauncher = process.env.PYTHON || (process.platform === 'win32' ? 'python' : 'python3');
   // --copies embeds real Python binaries instead of CI-only symlinks.
   run(pythonLauncher, ['-m', 'venv', venvDir, '--copies']);
+  bundleLinuxPythonLibs(pythonLauncher);
 
   const python = pythonBin('python');
   run(python, ['-m', 'pip', 'install', '--upgrade', 'pip']);
