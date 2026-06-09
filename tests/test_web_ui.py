@@ -52,6 +52,9 @@ class TestWebUI(unittest.TestCase):
         self.assertIn("excel_file", data)
         self.assertIn("output_dir", data)
         self.assertEqual(data["output_dir"], os.path.abspath(self.test_dir))
+        self.assertEqual(data["default_platform"], "linkedin")
+        self.assertTrue(data["platform_locked"])
+        self.assertEqual(data["supported_platforms"], ["linkedin"])
 
     def test_api_config_workbook_invalid(self):
         # Missing path resets to the canonical workbook
@@ -160,7 +163,7 @@ class TestWebUI(unittest.TestCase):
             self.assertFalse(data["active"])
 
     def test_api_post_status_active_job(self):
-        job = ActiveJob("facebook", 1, "Payment", "Test Article")
+        job = ActiveJob("linkedin", 1, "Payment", "Test Article")
         job.status = "pending-operator"
         with patch('src.web_ui.active_job', job):
             response = self.client.get('/api/post/status')
@@ -184,7 +187,7 @@ class TestWebUI(unittest.TestCase):
             web_ui_module.active_job = None
 
     def test_api_post_skip_pending_operator_after_status_poll(self):
-        job = ActiveJob("facebook", 1, "Payment", "Test Article")
+        job = ActiveJob("linkedin", 1, "Payment", "Test Article")
         job.status = "pending-operator"
         web_ui_module.active_job = job
         try:
@@ -194,14 +197,14 @@ class TestWebUI(unittest.TestCase):
             skip_response = self.client.post('/api/post/skip')
             self.assertEqual(skip_response.status_code, 200)
             data = json.loads(skip_response.data)
-            self.assertEqual(data["job"]["platform"], "facebook")
+            self.assertEqual(data["job"]["platform"], "linkedin")
             self.assertTrue(job.skip_requested)
             self.assertEqual(job.action_type, "skip")
         finally:
             web_ui_module.active_job = None
 
     def test_api_post_skip_during_preparing_keeps_job_active(self):
-        job = ActiveJob("facebook", 1, "Payment", "Test Article")
+        job = ActiveJob("linkedin", 1, "Payment", "Test Article")
         job.status = "preparing"
         web_ui_module.active_job = job
         try:
@@ -223,7 +226,7 @@ class TestWebUI(unittest.TestCase):
 
         response = self.client.post('/api/drafts/run', json={
             "keywords_path": "keywords.txt",
-            "platforms": "linkedin,facebook",
+            "platforms": "linkedin",
             "limit": 3,
         })
 
@@ -250,9 +253,9 @@ class TestWebUI(unittest.TestCase):
             self.assertEqual(response.status_code, 400)
 
     def test_api_post_confirm_completed_job_is_idempotent(self):
-        job = ActiveJob("facebook", 6, "Payment", "Test Article")
+        job = ActiveJob("linkedin", 6, "Payment", "Test Article")
         job.status = "success"
-        job.post_url = "https://facebook.com/post/1"
+        job.post_url = "https://linkedin.com/post/1"
         web_ui_module.active_job = job
         try:
             response = self.client.post('/api/post/confirm', json={"url": "https://example.com"})
@@ -263,7 +266,7 @@ class TestWebUI(unittest.TestCase):
             web_ui_module.active_job = None
 
     def test_api_post_skip_completed_job_is_idempotent(self):
-        job = ActiveJob("facebook", 6, "Payment", "Test Article")
+        job = ActiveJob("linkedin", 6, "Payment", "Test Article")
         job.status = "success"
         web_ui_module.active_job = job
         try:
@@ -276,14 +279,13 @@ class TestWebUI(unittest.TestCase):
 
     @patch('src.web_ui.check_platform_session')
     def test_api_sessions(self, mock_check):
-        mock_check.side_effect = lambda plat, cfg: "logged-in" if plat == "linkedin" else "login-required"
+        mock_check.side_effect = lambda plat, cfg: "logged-in"
         
         response = self.client.get('/api/sessions')
         self.assertEqual(response.status_code, 200)
         data = json.loads(response.data)
         self.assertEqual(data["linkedin"], "logged-in")
-        self.assertEqual(data["facebook"], "login-required")
-        self.assertEqual(data["instagram"], "login-required")
+        self.assertEqual(list(data.keys()), ["linkedin"])
 
     @patch('src.web_ui.write_post_result')
     def test_manual_write_result_missing_fields(self, mock_write):
@@ -304,7 +306,6 @@ class TestWebUI(unittest.TestCase):
             id=1,
             title="Test Article",
             linkedin_draft="LinkedIn draft",
-            facebook_draft="Facebook draft",
             link_post_raw="LinkedIn: https://linkedin.com/post/1",
         )
         mock_ingest.return_value = ([mock_row], [])
@@ -314,7 +315,7 @@ class TestWebUI(unittest.TestCase):
         data = json.loads(response.data)
 
         row = data["sheets"][0]["rows"][0]
-        self.assertEqual(row["eligible_platforms"], [{"platform": "facebook", "label": "Facebook"}])
+        self.assertEqual(row["eligible_platforms"], [])
         self.assertEqual(len(row["post_blockers"]), 1)
         self.assertEqual(row["post_blockers"][0]["platform"], "linkedin")
 
@@ -359,7 +360,6 @@ class TestWebUI(unittest.TestCase):
             row_idx=2,
             id=1,
             title="Test Article",
-            facebook_draft="Facebook draft",
             linkedin_draft="LinkedIn draft",
         )
         mock_ingest.return_value = ([mock_row], [])
@@ -368,13 +368,13 @@ class TestWebUI(unittest.TestCase):
         mock_thread.return_value = mock_thread_instance
 
         response = self.client.post('/api/post', json={
-            "platform": "facebook",
+            "platform": "linkedin",
             "row_id": 1,
             "sheet_name": "Payment",
         })
         self.assertEqual(response.status_code, 200)
         data = json.loads(response.data)
-        self.assertEqual(data["job"]["platform"], "facebook")
+        self.assertEqual(data["job"]["platform"], "linkedin")
         mock_thread.assert_called_once()
         mock_thread_instance.start.assert_called_once()
 

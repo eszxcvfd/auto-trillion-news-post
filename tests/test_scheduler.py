@@ -91,7 +91,7 @@ class TestScheduler(unittest.TestCase):
         self.assertEqual(sch["name"], "test-draft")
         self.assertEqual(sch["expression"], "0 * * * *")
         self.assertEqual(sch["job_type"], "draft")
-        self.assertEqual(sch["platforms"], "linkedin,facebook")
+        self.assertEqual(sch["platforms"], "linkedin")
         self.assertEqual(sch["post_limit"], 3)
         self.assertEqual(sch["enabled"], 1)
         self.assertIsNotNone(sch["next_run_at"])

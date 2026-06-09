@@ -28,25 +28,22 @@ class TestPlatformCapabilities(unittest.TestCase):
         shutil.rmtree(self.test_dir)
 
     def test_platform_requires_image(self):
-        self.assertTrue(platform_requires_image("instagram"))
-        self.assertTrue(platform_requires_image("pinterest"))
-        self.assertFalse(platform_requires_image("threads"))
         self.assertFalse(platform_requires_image("linkedin"))
 
     def test_is_posting_supported(self):
-        self.assertTrue(is_posting_supported("instagram"))
-        self.assertTrue(is_posting_supported("facebook"))
-        self.assertTrue(is_posting_supported("x"))
-        self.assertTrue(is_posting_supported("tiktok"))
-        self.assertTrue(is_posting_supported("youtube"))
+        self.assertTrue(is_posting_supported("linkedin"))
+        self.assertFalse(is_posting_supported("instagram"))
+        self.assertFalse(is_posting_supported("facebook"))
+        self.assertFalse(is_posting_supported("x"))
+        self.assertFalse(is_posting_supported("tiktok"))
+        self.assertFalse(is_posting_supported("youtube"))
         self.assertFalse(is_posting_supported("unsupported_platform"))
 
     def test_best_effort_platform_metadata(self):
-        self.assertEqual(BEST_EFFORT_POSTING_PLATFORMS, {"tiktok", "youtube"})
-        self.assertTrue(is_best_effort_posting("tiktok"))
+        self.assertEqual(BEST_EFFORT_POSTING_PLATFORMS, set())
+        self.assertFalse(is_best_effort_posting("tiktok"))
         self.assertFalse(is_best_effort_posting("threads"))
-        self.assertIn("photo/image", get_platform_mvp_mode("tiktok"))
-        self.assertIn("Community Post", get_platform_mvp_mode("youtube"))
+        self.assertIsNone(get_platform_mvp_mode("linkedin"))
 
     def test_resolve_local_image_path(self):
         image_name = "card.png"
@@ -58,13 +55,9 @@ class TestPlatformCapabilities(unittest.TestCase):
         self.assertEqual(resolved, os.path.abspath(image_path))
 
     def test_check_platform_media_requirements(self):
-        status, reason = check_platform_media_requirements("threads", None, self.config)
+        status, reason = check_platform_media_requirements("linkedin", None, self.config)
         self.assertEqual(status, "ok")
         self.assertIsNone(reason)
-
-        status, reason = check_platform_media_requirements("instagram", None, self.config)
-        self.assertEqual(status, "skipped_missing_required_media")
-        self.assertIn("requires an image", reason)
 
     def test_evaluate_row_eligibility_rejects_image_required_without_media(self):
         row = BusinessWorkbookRow(
@@ -72,29 +65,29 @@ class TestPlatformCapabilities(unittest.TestCase):
             row_idx=2,
             id=1,
             title="Test Title",
-            instagram_draft="Instagram content",
+            linkedin_draft="LinkedIn content",
         )
 
         status, reason = evaluate_row_eligibility(
             row,
-            "instagram",
+            "linkedin",
             config=self.config,
         )
-        self.assertEqual(status, "skipped_missing_required_media")
-        self.assertIn("requires an image", reason)
+        self.assertEqual(status, "eligible")
+        self.assertIsNone(reason)
 
-    def test_list_eligible_platforms_excludes_image_required_without_media(self):
+    def test_list_eligible_platforms_only_returns_linkedin(self):
         row = BusinessWorkbookRow(
             sheet_name="Payment",
             row_idx=2,
             id=1,
             title="Test Title",
-            instagram_draft="Instagram content",
+            linkedin_draft="LinkedIn content",
             threads_draft="Threads content",
         )
 
         eligible = list_eligible_platforms(row, config=self.config)
-        self.assertEqual([p for p, _ in eligible], ["threads"])
+        self.assertEqual([p for p, _ in eligible], ["linkedin"])
 
 
 if __name__ == "__main__":

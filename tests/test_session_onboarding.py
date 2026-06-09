@@ -63,10 +63,7 @@ class TestSessionOnboarding(unittest.TestCase):
         
         self.assertIn("linkedin", data)
         self.assertEqual(data["linkedin"]["status"], "ready")
-        self.assertIn("facebook", data)
-        self.assertEqual(data["facebook"]["status"], "login-required")
-        self.assertIn("x", data)
-        self.assertEqual(data["x"]["status"], "login-required")
+        self.assertEqual(list(data.keys()), ["linkedin"])
 
     @patch('src.web_ui.threading.Thread')
     def test_api_sessions_onboard_lifecycle(self, mock_thread):
@@ -133,17 +130,17 @@ class TestSessionOnboarding(unittest.TestCase):
         mock_p_instance.chromium.launch_persistent_context.return_value = mock_context
         mock_playwright.return_value.__enter__.return_value = mock_p_instance
 
-        response = self.client.post('/api/sessions/clear', json={"platform": "facebook"})
+        response = self.client.post('/api/sessions/clear', json={"platform": "linkedin"})
         self.assertEqual(response.status_code, 200)
         data = json.loads(response.data)
-        self.assertIn("Session cleared for facebook", data["message"])
+        self.assertIn("Session cleared for linkedin", data["message"])
         
-        mock_context.clear_cookies.assert_any_call(domain="facebook.com")
-        mock_context.clear_cookies.assert_any_call(domain=".facebook.com")
+        mock_context.clear_cookies.assert_any_call(domain="linkedin.com")
+        mock_context.clear_cookies.assert_any_call(domain=".linkedin.com")
         mock_context.close.assert_called_once()
 
         status = get_platform_sessions_status(self.db_path)
-        self.assertEqual(status["facebook"]["status"], "login-required")
+        self.assertEqual(status["linkedin"]["status"], "login-required")
 
 if __name__ == "__main__":
     unittest.main()

@@ -99,8 +99,9 @@ class TestDraftRunWorkbookBackfill(unittest.TestCase):
         linkedin_cell = str(ws.cell(row=2, column=4).value)
         self.assertTrue(linkedin_cell.endswith("_linkedin.md"))
         self.assertTrue(os.path.exists(resolve_post_draft_path(linkedin_cell, self.excel_file)))
-        self.assertTrue(os.path.exists(resolve_post_draft_path(str(ws.cell(row=2, column=5).value), self.excel_file)))
-        self.assertTrue(os.path.exists(resolve_post_draft_path(str(ws.cell(row=2, column=6).value), self.excel_file)))
+        self.assertIsNone(ws.cell(row=2, column=5).value)
+        self.assertIsNone(ws.cell(row=2, column=6).value)
+        mock_generate.assert_called_once()
         wb.close()
 
 

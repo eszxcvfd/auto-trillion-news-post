@@ -2,6 +2,10 @@ import unittest
 from src.models import BusinessWorkbookRow
 from src.posting_core import (
     canonicalize_platform,
+    filter_link_post_for_project_scope,
+    has_linkedin_workbook_content,
+    is_legacy_orphan_workbook_row,
+    is_operator_stray_workbook_row,
     parse_link_post_document,
     serialize_link_post_document,
     evaluate_row_eligibility,
@@ -150,7 +154,7 @@ class TestPostingCore(unittest.TestCase):
         )
 
         eligible = list_eligible_platforms(row)
-        self.assertEqual([p for p, _ in eligible], ["facebook"])
+        self.assertEqual([p for p, _ in eligible], [])
 
     def test_list_eligible_platforms_manual_retry_allows_skip(self):
         row = BusinessWorkbookRow(
@@ -167,7 +171,7 @@ class TestPostingCore(unittest.TestCase):
         )
 
         eligible = list_eligible_platforms(row, manual_retry=True)
-        self.assertEqual([p for p, _ in eligible], ["facebook", "x"])
+        self.assertEqual([p for p, _ in eligible], [])
 
     def test_resolve_manual_post_target_single_eligible(self):
         row = BusinessWorkbookRow(
@@ -193,9 +197,9 @@ class TestPostingCore(unittest.TestCase):
             facebook_draft="Facebook content",
         )
 
-        with self.assertRaises(ValueError) as context:
-            resolve_manual_post_target(row)
-        self.assertIn("Multiple eligible platforms", str(context.exception))
+        platform_key, draft = resolve_manual_post_target(row)
+        self.assertEqual(platform_key, "linkedin")
+        self.assertEqual(draft, "LinkedIn content")
 
     def test_resolve_manual_post_target_rejects_ineligible_choice(self):
         row = BusinessWorkbookRow(
@@ -210,11 +214,10 @@ class TestPostingCore(unittest.TestCase):
 
         with self.assertRaises(ValueError) as context:
             resolve_manual_post_target(row, "linkedin")
-        self.assertIn("already posted", str(context.exception))
+        self.assertIn("Already posted", str(context.exception))
 
-        platform_key, draft = resolve_manual_post_target(row, "facebook")
-        self.assertEqual(platform_key, "facebook")
-        self.assertEqual(draft, "Facebook content")
+        with self.assertRaises(ValueError):
+            resolve_manual_post_target(row, "facebook")
 
     def test_build_posting_plan_mixed_eligibility(self):
         rows = [
@@ -242,6 +245,58 @@ class TestPostingCore(unittest.TestCase):
         
         self.assertTrue(any("skipped for platform 'LinkedIn': Already posted" in s for s in plan.skipped_summary))
         self.assertTrue(any("skipped for platform 'LinkedIn': Explicitly skipped" in s for s in plan.skipped_summary))
+
+    def test_filter_link_post_for_project_scope_keeps_linkedin_only(self):
+        raw_text = (
+            "LinkedIn: https://linkedin.com/post/123\n"
+            "Facebook: [skip] skipped by operator"
+        )
+        self.assertEqual(
+            filter_link_post_for_project_scope(raw_text),
+            "LinkedIn: https://linkedin.com/post/123",
+        )
+        self.assertIsNone(
+            filter_link_post_for_project_scope("Facebook: [skip] skipped by operator")
+        )
+
+    def test_is_legacy_orphan_workbook_row_detects_facebook_only_rows(self):
+        orphan = BusinessWorkbookRow(
+            sheet_name="Payment services",
+            row_idx=9,
+            id=6,
+            title="Vietnam banks prevent VND5 trillion in transfers after warnings",
+            broken_draft_refs={"facebook": "posts/example_facebook.md"},
+            link_post_raw="Facebook: [skip] skipped by operator",
+        )
+        pending = BusinessWorkbookRow(
+            sheet_name="Payment services",
+            row_idx=6,
+            id=5,
+            title="Ministry of Finance proposes VND 102 trillion tax payment extension for 2025",
+            linkedin_draft="Draft body",
+        )
+        self.assertTrue(is_legacy_orphan_workbook_row(orphan))
+        self.assertFalse(is_legacy_orphan_workbook_row(pending))
+
+    def test_operator_stray_workbook_row_hides_rows_without_linkedin_content(self):
+        stray = BusinessWorkbookRow(
+            sheet_name="Mobile payments trillion $",
+            row_idx=7,
+            id=6,
+            title="Mobile money transactions hits GH¢3trn as digital payments surge – BoG Report",
+            image_link="2026-06-09_006_mobile_payments_trillion.png",
+        )
+        ready = BusinessWorkbookRow(
+            sheet_name="Mobile payments trillion $",
+            row_idx=3,
+            id=2,
+            title="Mobile money doubles to $2 trillion in 4 years",
+            linkedin_draft="Draft body",
+        )
+        self.assertFalse(has_linkedin_workbook_content(stray))
+        self.assertTrue(is_operator_stray_workbook_row(stray))
+        self.assertTrue(has_linkedin_workbook_content(ready))
+        self.assertFalse(is_operator_stray_workbook_row(ready))
 
 if __name__ == "__main__":
     unittest.main()

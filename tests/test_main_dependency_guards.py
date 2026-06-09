@@ -5,14 +5,15 @@ import main
 
 
 class TestNormalizeGeneratePlatform(unittest.TestCase):
-    def test_blank_platform_means_all(self):
-        self.assertEqual(main.normalize_generate_platform(None), "all")
-        self.assertEqual(main.normalize_generate_platform(""), "all")
-        self.assertEqual(main.normalize_generate_platform("   "), "all")
-        self.assertEqual(main.normalize_generate_platform("none"), "all")
+    def test_blank_platform_means_linkedin(self):
+        self.assertEqual(main.normalize_generate_platform(None), "linkedin")
+        self.assertEqual(main.normalize_generate_platform(""), "linkedin")
+        self.assertEqual(main.normalize_generate_platform("   "), "linkedin")
+        self.assertEqual(main.normalize_generate_platform("none"), "linkedin")
 
-    def test_explicit_platform_is_preserved(self):
-        self.assertEqual(main.normalize_generate_platform("facebook"), "facebook")
+    def test_non_linkedin_platform_is_rejected(self):
+        with self.assertRaises(ValueError):
+            main.normalize_generate_platform("facebook")
 
 
 class TestExecuteRunGenerateScope(unittest.TestCase):
@@ -34,7 +35,7 @@ class TestExecuteRunGenerateScope(unittest.TestCase):
         ):
             main.execute_run("keywords.txt", platform=None, limit=2)
 
-        mock_execute_generate.assert_called_once_with("all", None, target_ids=None)
+        mock_execute_generate.assert_called_once_with("linkedin", None, target_ids=None)
 
     @patch("main.AppConfig")
     @patch("main.execute_generate")
@@ -56,7 +57,7 @@ class TestExecuteRunGenerateScope(unittest.TestCase):
             main.execute_run("keywords.txt", platform=None, limit=2)
 
         mock_execute_generate.assert_called_once_with(
-            "all",
+            "linkedin",
             2,
             target_ids=[("Payment services", 3)],
         )

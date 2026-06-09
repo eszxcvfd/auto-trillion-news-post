@@ -282,10 +282,7 @@ This is the strategically insightful post body.
 
         item = NewsItem(id=1, platform="facebook", generated_post_file=None)
         result = run_assisted_posting(item, self.config, post_content="Facebook draft text")
-        self.assertTrue(result)
-        mock_page.goto.assert_called_with(
-            "https://www.facebook.com/", timeout=45000, wait_until="domcontentloaded"
-        )
+        self.assertFalse(result)
 
     @patch("playwright.sync_api.sync_playwright")
     @patch("builtins.input")
@@ -359,10 +356,8 @@ This is the strategically insightful post body.
                 post_content="Facebook draft text",
             )
 
-        self.assertTrue(result)
-        self.assertIn("upload", call_order)
-        self.assertIn("paste", call_order)
-        self.assertLess(call_order.index("upload"), call_order.index("paste"))
+        self.assertFalse(result)
+        self.assertEqual(call_order, [])
 
     @patch("playwright.sync_api.sync_playwright")
     @patch("builtins.input")
@@ -392,10 +387,7 @@ This is the strategically insightful post body.
 
         item = NewsItem(id=1, platform="x", generated_post_file=None)
         result = run_assisted_posting(item, self.config, post_content="X post draft")
-        self.assertTrue(result)
-        mock_page.goto.assert_called_with(
-            "https://x.com/compose/tweet", timeout=45000, wait_until="domcontentloaded"
-        )
+        self.assertFalse(result)
 
     def test_run_assisted_posting_requires_image_for_instagram(self):
         item = NewsItem(
@@ -451,10 +443,7 @@ This is the strategically insightful post body.
         )
 
         result = run_assisted_posting(item, self.config, post_content="TikTok photo caption")
-        self.assertTrue(result)
-        mock_page.goto.assert_called_with(
-            "https://www.tiktok.com/upload", timeout=45000, wait_until="domcontentloaded"
-        )
+        self.assertFalse(result)
 
 if __name__ == "__main__":
     unittest.main()
