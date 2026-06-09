@@ -39,7 +39,7 @@ class TestFacebookCaptionPaste(unittest.TestCase):
         dialog.locator.return_value = candidates
 
         with patch(
-            "src.platform_posting._facebook_dialog_locators",
+            "src.platform_workflows.facebook_workflow._facebook_dialog_locators",
             return_value=iter([dialog]),
         ):
             selected = _facebook_caption_editor(page)
@@ -47,7 +47,7 @@ class TestFacebookCaptionPaste(unittest.TestCase):
 
     def test_paste_facebook_caption_uses_js_first(self):
         page = MagicMock()
-        with patch("src.platform_posting._insert_facebook_caption_via_js", return_value=True):
+        with patch("src.platform_workflows.facebook_workflow._insert_facebook_caption_via_js", return_value=True):
             _paste_facebook_caption(page, "Caption body")
         page.keyboard.insert_text.assert_not_called()
 

@@ -130,20 +130,25 @@ This is the strategically insightful post body.
         )
         
         with patch(
-            "src.platform_posting._open_linkedin_editor",
-            return_value="div.ql-editor[contenteditable='true']",
-        ), patch(
-            "src.platform_posting._insert_linkedin_caption_via_js",
+            "src.platform_workflows.linkedin_workflow._wait_for_linkedin_login",
             return_value=True,
         ), patch(
-            "src.platform_posting._upload_linkedin_image",
+            "src.platform_workflows.linkedin_workflow._open_linkedin_editor",
+            return_value="div.ql-editor[contenteditable='true']",
+        ), patch(
+            "src.platform_workflows.linkedin_workflow._insert_linkedin_caption_via_js",
+            return_value=True,
+        ), patch(
+            "src.platform_workflows.linkedin_workflow._upload_linkedin_image",
             return_value=True,
         ):
             result = run_assisted_posting(item, self.config)
         self.assertTrue(result)
 
         mock_p.chromium.launch_persistent_context.assert_called_once()
-        mock_page.goto.assert_called_with("https://www.linkedin.com/feed/", timeout=45000)
+        mock_page.goto.assert_called_with(
+            "https://www.linkedin.com/feed/", timeout=45000, wait_until="domcontentloaded"
+        )
         mock_context.close.assert_called_once()
 
     @patch("playwright.sync_api.sync_playwright")
@@ -222,17 +227,22 @@ This is the strategically insightful post body.
         item = NewsItem(id=1, generated_post_file=None, platform="linkedin")
 
         with patch(
-            "src.platform_posting._open_linkedin_editor",
+            "src.platform_workflows.linkedin_workflow._wait_for_linkedin_login",
+            return_value=True,
+        ), patch(
+            "src.platform_workflows.linkedin_workflow._open_linkedin_editor",
             return_value="div.ql-editor[contenteditable='true']",
         ), patch(
-            "src.platform_posting._insert_linkedin_caption_via_js",
+            "src.platform_workflows.linkedin_workflow._insert_linkedin_caption_via_js",
             return_value=True,
         ) as mock_js_caption:
             result = run_assisted_posting(
                 item, self.config, post_content="Direct post content"
             )
         self.assertTrue(result)
-        mock_js_caption.assert_called_once_with(mock_page, "Direct post content")
+        mock_js_caption.assert_called_once()
+        called_args, _ = mock_js_caption.call_args
+        self.assertEqual(called_args[1], "Direct post content")
 
     def test_run_assisted_posting_rejects_invalid_platform(self):
         item = NewsItem(id=1, platform="unsupported_platform", generated_post_file=None)
@@ -273,7 +283,9 @@ This is the strategically insightful post body.
         item = NewsItem(id=1, platform="facebook", generated_post_file=None)
         result = run_assisted_posting(item, self.config, post_content="Facebook draft text")
         self.assertTrue(result)
-        mock_page.goto.assert_called_with("https://www.facebook.com/", timeout=45000)
+        mock_page.goto.assert_called_with(
+            "https://www.facebook.com/", timeout=45000, wait_until="domcontentloaded"
+        )
 
     @patch("playwright.sync_api.sync_playwright")
     @patch("builtins.input")
@@ -335,10 +347,10 @@ This is the strategically insightful post body.
             "src.assisted_posting.prepare_posting_assets",
             return_value=("/tmp/card.png", None),
         ), patch(
-            "src.platform_posting._upload_facebook_image",
+            "src.platform_workflows.facebook_workflow._upload_facebook_image",
             side_effect=lambda *a, **k: call_order.append("upload") or True,
         ), patch(
-            "src.platform_posting._insert_facebook_caption_via_js",
+            "src.platform_workflows.facebook_workflow._insert_facebook_caption_via_js",
             side_effect=lambda *a, **k: call_order.append("paste") or True,
         ):
             result = run_assisted_posting(
@@ -381,7 +393,9 @@ This is the strategically insightful post body.
         item = NewsItem(id=1, platform="x", generated_post_file=None)
         result = run_assisted_posting(item, self.config, post_content="X post draft")
         self.assertTrue(result)
-        mock_page.goto.assert_called_with("https://x.com/compose/tweet", timeout=45000)
+        mock_page.goto.assert_called_with(
+            "https://x.com/compose/tweet", timeout=45000, wait_until="domcontentloaded"
+        )
 
     def test_run_assisted_posting_requires_image_for_instagram(self):
         item = NewsItem(
@@ -438,7 +452,9 @@ This is the strategically insightful post body.
 
         result = run_assisted_posting(item, self.config, post_content="TikTok photo caption")
         self.assertTrue(result)
-        mock_page.goto.assert_called_with("https://www.tiktok.com/upload", timeout=45000)
+        mock_page.goto.assert_called_with(
+            "https://www.tiktok.com/upload", timeout=45000, wait_until="domcontentloaded"
+        )
 
 if __name__ == "__main__":
     unittest.main()
