@@ -5,6 +5,11 @@
   "main": "main.js",
   "author": "Trillion News",
   "license": "UNLICENSED",
+  "homepage": "https://github.com/eszxcvfd/auto-trillion-news-post",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/eszxcvfd/auto-trillion-news-post.git"
+  },
   "private": true,
   "scripts": {
     "start": "electron .",

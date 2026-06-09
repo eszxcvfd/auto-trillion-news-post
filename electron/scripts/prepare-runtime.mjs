@@ -34,9 +34,9 @@ function main() {
   const pythonLauncher = process.env.PYTHON || (process.platform === 'win32' ? 'python' : 'python3');
   run(pythonLauncher, ['-m', 'venv', venvDir]);
 
-  const pip = pythonBin('pip');
-  run(pip, ['install', '--upgrade', 'pip']);
-  run(pip, ['install', '-r', path.join(repoRoot, 'requirements.txt')]);
+  const python = pythonBin('python');
+  run(python, ['-m', 'pip', 'install', '--upgrade', 'pip']);
+  run(python, ['-m', 'pip', 'install', '-r', path.join(repoRoot, 'requirements.txt')]);
 
   const playwright = pythonBin('playwright');
   run(playwright, ['install', 'chromium'], {
