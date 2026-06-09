@@ -9,14 +9,24 @@ from flask import Flask, jsonify, request, send_from_directory, render_template
 
 from src.config import AppConfig
 from src.models import NewsItem
-from src.business_workbook import detect_workbook_type, ingest_business_workbook
+from src.business_workbook import (
+    detect_workbook_type,
+    filter_dashboard_workbook_rows,
+    ingest_business_workbook,
+)
 from src.platform_capabilities import (
+    PROJECT_DEFAULT_PLATFORM,
+    PROJECT_DEFAULT_PLATFORM_LABEL,
+    PROJECT_SUPPORTED_PLATFORM_CSV,
     SUPPORTED_SESSION_PLATFORMS,
     SESSION_DOMAINS,
     SESSION_LOGIN_URLS,
+    normalize_project_platform,
+    normalize_project_platforms_csv,
 )
 from src.posting_core import (
     build_posting_plan,
+    filter_link_post_for_project_scope,
     list_eligible_platforms,
     list_row_post_blockers,
     resolve_manual_post_target,
@@ -37,6 +47,7 @@ app = Flask(__name__, template_folder=os.path.join(os.path.dirname(__file__), 't
 def _row_to_api_dict(row, config: AppConfig, workbook_path: str) -> Dict[str, Any]:
     """Serialize a workbook row with eligible manual-post platform targets."""
     row_dict = row.to_dict()
+    row_dict["link_post_raw"] = filter_link_post_for_project_scope(row_dict.get("link_post_raw"))
     row_dict["eligible_platforms"] = [
         {"platform": platform_key, "label": PLATFORM_CANONICAL[platform_key]}
         for platform_key, _ in list_eligible_platforms(
@@ -136,7 +147,10 @@ def get_config():
         "image_dir": os.path.abspath(config.image_dir),
         "post_dir": os.path.abspath(config.post_dir),
         "log_dir": os.path.abspath(config.log_dir),
-        "default_platform": config.default_platform
+        "default_platform": config.default_platform,
+        "default_platform_label": PROJECT_DEFAULT_PLATFORM_LABEL,
+        "supported_platforms": [PROJECT_DEFAULT_PLATFORM],
+        "platform_locked": True,
     })
 
 @app.route('/api/config/workbook', methods=['POST'])
@@ -226,6 +240,7 @@ def inspect_workbook():
         
     try:
         rows, warnings = ingest_business_workbook(filepath)
+        rows = filter_dashboard_workbook_rows(rows)
         
         # Group rows by sheet
         sheets_dict = {}
@@ -291,8 +306,12 @@ def get_plan():
     config = AppConfig()
     filepath = config.excel_file
     limit = request.args.get("limit", default=2, type=int)
-    platforms_str = request.args.get("platforms", default="linkedin,facebook,x,instagram,pinterest,threads,tiktok,youtube")
-    platforms = [p.strip() for p in platforms_str.split(",") if p.strip()]
+    platforms_str = request.args.get("platforms", default=PROJECT_SUPPORTED_PLATFORM_CSV)
+    platforms = [
+        p.strip()
+        for p in normalize_project_platforms_csv(platforms_str, strict=False).split(",")
+        if p.strip()
+    ]
     
     if not os.path.exists(filepath):
         return jsonify({"error": "Active workbook does not exist"}), 404
@@ -326,7 +345,14 @@ def start_draft_run():
         if limit < 1:
             return jsonify({"error": "limit must be greater than 0"}), 400
 
-    platforms = [p.strip().lower() for p in platforms_raw.split(",") if p.strip()] or [None]
+    try:
+        platforms = [
+            p.strip()
+            for p in normalize_project_platforms_csv(platforms_raw, strict=True).split(",")
+            if p.strip()
+        ]
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
 
     config = AppConfig()
     db_path = os.path.join(config.output_dir, "scheduler.db")
@@ -351,7 +377,7 @@ def start_draft_run():
 
 @app.route('/api/sessions', methods=['GET'])
 def get_sessions():
-    """Checks the login session status for LinkedIn (and placeholder check for others)."""
+    """Checks the saved login session status for the LinkedIn-only operator flow."""
     config = AppConfig()
     db_path = os.path.join(config.output_dir, "scheduler.db")
     from src.scheduler import save_platform_session_status
@@ -437,7 +463,10 @@ def start_session_onboard():
     if not platform:
         return jsonify({"error": "platform is required"}), 400
         
-    platform = platform.lower()
+    try:
+        platform = normalize_project_platform(platform, strict=True)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
     if platform not in SUPPORTED_SESSION_PLATFORMS:
         return jsonify({"error": f"Platform '{platform}' is not supported for onboarding"}), 400
         
@@ -516,7 +545,10 @@ def clear_platform_session():
     if not platform:
         return jsonify({"error": "platform is required"}), 400
         
-    platform = platform.lower()
+    try:
+        platform = normalize_project_platform(platform, strict=True)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
     if platform not in SUPPORTED_SESSION_PLATFORMS:
         return jsonify({"error": f"Platform '{platform}' is not supported"}), 400
         
@@ -677,6 +709,11 @@ def start_post():
         if active_job is not None and not active_job.is_active():
             active_job = None
             
+        try:
+            platform = normalize_project_platform(platform, strict=True)
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
+
         # Verify row exists and platform content is valid
         try:
             rows, _ = ingest_business_workbook(filepath, sheet_scope=[sheet_name])
@@ -918,6 +955,7 @@ def manual_write_result():
         return jsonify({"error": "Active workbook does not exist"}), 404
         
     try:
+        platform = normalize_project_platform(platform, strict=True)
         new_val = write_post_result(
             workbook_path=filepath,
             sheet_name=sheet,
@@ -972,7 +1010,7 @@ def add_schedule():
             job_type=job_type,
             workbook_path=data.get("workbook_path"),
             sheet_name=data.get("sheet_name"),
-            platforms=data.get("platforms"),
+            platforms=normalize_project_platforms_csv(data.get("platforms"), strict=False),
             post_limit=data.get("post_limit", 2)
         )
         return jsonify({"message": "Schedule created", "id": schedule_id}), 201
